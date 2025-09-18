@@ -1,0 +1,121 @@
+"""Command line interface for the Sentinela project."""
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from sentinela.container import build_container
+from sentinela.domain.entities import Portal, PortalSelectors, Selector
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Sentinela - coletor de notícias")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    register = subparsers.add_parser(
+        "register-portal", help="Registra um novo portal a partir de um arquivo JSON"
+    )
+    register.add_argument("path", type=Path, help="Caminho para o arquivo JSON")
+
+    subparsers.add_parser("list-portals", help="Lista todos os portais cadastrados")
+
+    collect = subparsers.add_parser(
+        "collect", help="Coleta notícias para um portal em um intervalo de datas"
+    )
+    collect.add_argument("portal", help="Nome do portal cadastrado")
+    collect.add_argument("start_date", help="Data inicial no formato YYYY-MM-DD")
+    collect.add_argument(
+        "end_date",
+        nargs="?",
+        help="Data final no formato YYYY-MM-DD. Se omitida usa a data inicial.",
+    )
+
+    list_articles = subparsers.add_parser(
+        "list-articles", help="Lista notícias coletadas para um portal"
+    )
+    list_articles.add_argument("portal", help="Nome do portal cadastrado")
+    list_articles.add_argument("start_date", help="Data inicial no formato YYYY-MM-DD")
+    list_articles.add_argument("end_date", help="Data final no formato YYYY-MM-DD")
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    container = build_container()
+
+    if args.command == "register-portal":
+        portal = _load_portal_from_json(args.path)
+        container.portal_service.register(portal)
+        print(f"Portal '{portal.name}' cadastrado com sucesso.")
+    elif args.command == "list-portals":
+        for portal in container.portal_service.list_portals():
+            print(f"- {portal.name}: {portal.base_url}")
+    elif args.command == "collect":
+        start_date = _parse_date(args.start_date)
+        end_date = _parse_date(args.end_date) if args.end_date else start_date
+        articles = container.collector_service.collect(args.portal, start_date, end_date)
+        print(f"{len(articles)} novas notícias coletadas para '{args.portal}'.")
+    elif args.command == "list-articles":
+        start_date = _parse_date(args.start_date)
+        end_date = _parse_date(args.end_date)
+        for article in container.collector_service.list_articles(
+            args.portal, start_date, end_date
+        ):
+            print(
+                json.dumps(
+                    {
+                        "portal": article.portal_name,
+                        "titulo": article.title,
+                        "url": article.url,
+                        "publicado_em": article.published_at.isoformat(),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+    else:
+        raise ValueError(f"Comando desconhecido: {args.command}")
+
+
+def _parse_date(value: str) -> datetime.date:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError(
+            "Datas devem estar no formato YYYY-MM-DD"
+        ) from exc
+
+
+def _load_portal_from_json(path: Path) -> Portal:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    selectors = data["selectors"]
+    portal_selectors = PortalSelectors(
+        listing_article=_build_selector(selectors["listing_article"]),
+        listing_title=_build_selector(selectors["listing_title"]),
+        listing_url=_build_selector(selectors["listing_url"]),
+        article_content=_build_selector(selectors["article_content"]),
+        article_date=_build_selector(selectors["article_date"]),
+        listing_summary=_build_selector(selectors["listing_summary"])
+        if selectors.get("listing_summary")
+        else None,
+    )
+
+    return Portal(
+        name=data["name"],
+        base_url=data["base_url"],
+        listing_path_template=data["listing_path_template"],
+        selectors=portal_selectors,
+        headers=data.get("headers", {}),
+        date_format=data.get("date_format", "%Y-%m-%d"),
+    )
+
+
+def _build_selector(data: dict[str, Any]) -> Selector:
+    return Selector(query=data["query"], attribute=data.get("attribute"))
+
+
+if __name__ == "__main__":
+    main()
