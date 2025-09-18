@@ -1,0 +1,17 @@
+{
+  "name": "Noticias Exemplo",
+  "base_url": "https://www.exemplo.com",
+  "listing_path_template": "/arquivo/{date}",
+  "date_format": "%Y-%m-%d",
+  "headers": {
+    "User-Agent": "Mozilla/5.0"
+  },
+  "selectors": {
+    "listing_article": {"query": "article.card"},
+    "listing_title": {"query": "h2 a"},
+    "listing_url": {"query": "h2 a", "attribute": "href"},
+    "listing_summary": {"query": "p.resumo"},
+    "article_content": {"query": "div.conteudo"},
+    "article_date": {"query": "time", "attribute": "datetime"}
+  }
+}
