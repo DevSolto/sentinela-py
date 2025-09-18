@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 sentinela/__init__.py
+sentinela/api.py
 sentinela/cli.py
 sentinela/container.py
 sentinela.egg-info/PKG-INFO

@@ -7,7 +7,7 @@ name = "sentinela"
 version = "0.1.0"
 description = "Coletor modular de notícias em portais com MongoDB"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [{name = "Sentinela"}]
 dependencies = [
     "requests>=2.31",

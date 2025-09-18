@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from typing import Iterable, List
+import sys
+import logging
 
 from sentinela.domain.entities import Article, Portal
 from sentinela.domain.repositories import ArticleRepository, PortalRepository
@@ -74,3 +76,68 @@ class NewsCollectorService:
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         return self._article_repository.list_by_period(portal_name, start_dt, end_dt)
+
+    def collect_all_for_portal(
+        self, portal_name: str, start_page: int = 1, max_pages: int | None = None
+    ) -> List[Article]:
+        log = logging.getLogger("sentinela.service")
+        portal = self._portal_repository.get_by_name(portal_name)
+        if not portal:
+            raise ValueError(f"Portal '{portal_name}' not found")
+        total_new = 0
+        total_seen = 0
+        page = max(1, start_page)
+        pages_processed = 0
+        saved_urls: set[str] = set()
+
+        def status(msg: str) -> None:
+            log.info(msg)
+
+        status(
+            f"Portal '{portal_name}': iniciando na página {page}"
+            + (f" (limite {max_pages})" if max_pages else "")
+        )
+
+        all_new: List[Article] = []
+        while True:
+            if max_pages is not None and pages_processed >= max_pages:
+                break
+
+            # Coleta apenas uma página usando o scraper existente por paginação.
+            collected = self._scraper.collect_all(
+                portal, start_page=page, max_pages=1
+            )
+            if not collected:
+                status(
+                    f"Portal '{portal_name}': página {page} sem itens, encerrando."
+                )
+                break
+
+            page_seen = len(collected)
+            total_seen += page_seen
+            # Filtra duplicados existentes no banco e duplicados dentro do mesmo run
+            new_articles: List[Article] = []
+            for a in collected:
+                if a.url in saved_urls:
+                    continue
+                if not self._article_repository.exists(a.portal_name, a.url):
+                    new_articles.append(a)
+                    saved_urls.add(a.url)
+
+            # Salva incrementalmente
+            if new_articles:
+                self._article_repository.save_many(new_articles)
+                total_new += len(new_articles)
+                all_new.extend(new_articles)
+
+            status(
+                f"Página {page}: itens {page_seen}, novos salvos {len(new_articles)} | Total: vistos {total_seen}, novos {total_new}"
+            )
+
+            page += 1
+            pages_processed += 1
+
+        log.info(
+            f"Concluído. Páginas: {pages_processed}, vistos: {total_seen}, novos salvos: {total_new}"
+        )
+        return all_new

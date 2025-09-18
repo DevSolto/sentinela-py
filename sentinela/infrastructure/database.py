@@ -23,7 +23,7 @@ class MongoSettings:
     @classmethod
     def from_env(cls) -> "MongoSettings":
         return cls(
-            uri=get_env("MONGO_URI", "mongodb://localhost:27017"),
+            uri="mongodb+srv://santiagosiqueirasouto_db_user:8pRpyR0gvyP9kuGz@cluster0.rax0sme.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
             database=get_env("MONGO_DATABASE", "sentinela"),
         )
 

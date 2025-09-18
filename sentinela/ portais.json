@@ -1,17 +1,17 @@
 {
-  "name": "Noticias Exemplo",
-  "base_url": "https://www.exemplo.com",
-  "listing_path_template": "/arquivo/{date}",
-  "date_format": "%Y-%m-%d",
-  "headers": {
-    "User-Agent": "Mozilla/5.0"
-  },
-  "selectors": {
-    "listing_article": {"query": "article.card"},
-    "listing_title": {"query": "h2 a"},
-    "listing_url": {"query": "h2 a", "attribute": "href"},
-    "listing_summary": {"query": "p.resumo"},
-    "article_content": {"query": "div.conteudo"},
-    "article_date": {"query": "time", "attribute": "datetime"}
-  }
+"name": "Blog do Nill Junior",
+"base_url": "https://nilljunior.com.br",
+"listing_path_template": "/page/{page}",
+"date_format": "%d de %B de %Y",
+"headers": {
+"User-Agent": "SentinelaBot/1.0 (+https://github.com/sentinela)"
+},
+"selectors": {
+"listing_article": { "query": "div.post.type-post" },
+"listing_title": { "query": "h2.post-title" },
+"listing_url": { "query": "h2.post-title a", "attribute": "href" },
+"listing_summary": { "query": "div.entry p" },
+"article_content": { "query": "div.entry" },
+"article_date": { "query": "span.meta-date" }
+}
 }

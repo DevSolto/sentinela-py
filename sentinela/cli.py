@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import json
 from datetime import datetime
 from pathlib import Path
@@ -40,11 +42,37 @@ def parse_args() -> argparse.Namespace:
     list_articles.add_argument("start_date", help="Data inicial no formato YYYY-MM-DD")
     list_articles.add_argument("end_date", help="Data final no formato YYYY-MM-DD")
 
+    collect_all = subparsers.add_parser(
+        "collect-all", help="Coleta notícias em todas as páginas de um portal"
+    )
+    collect_all.add_argument("portal", help="Nome do portal cadastrado")
+    collect_all.add_argument(
+        "--start-page", type=int, default=1, help="Página inicial (default: 1)"
+    )
+    collect_all.add_argument(
+        "--max-pages", type=int, default=None, help="Limite de páginas a varrer"
+    )
+
+    # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
+    for sp in (register, collect, list_articles, collect_all):
+        sp.add_argument(
+            "--log-level",
+            default=None,
+            help="Nível de log: DEBUG, INFO, WARNING, ERROR (padrão INFO)",
+        )
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    level_name = (
+        getattr(args, "log_level", None) or os.getenv("SENTINELA_LOG_LEVEL", "INFO")
+    )
+    logging.basicConfig(
+        level=getattr(logging, str(level_name).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
     container = build_container()
 
     if args.command == "register-portal":
@@ -76,6 +104,13 @@ def main() -> None:
                     ensure_ascii=False,
                 )
             )
+    elif args.command == "collect-all":
+        new_articles = container.collector_service.collect_all_for_portal(
+            args.portal, start_page=args.start_page, max_pages=args.max_pages
+        )
+        print(
+            f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
+        )
     else:
         raise ValueError(f"Comando desconhecido: {args.command}")
 
