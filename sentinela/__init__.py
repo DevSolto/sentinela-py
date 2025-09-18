@@ -1,0 +1,14 @@
+"""Sentinela - coletor modular de notícias."""
+from .application.services import NewsCollectorService, PortalRegistrationService
+from .container import build_container
+from .domain.entities import Article, Portal, PortalSelectors, Selector
+
+__all__ = [
+    "Article",
+    "Portal",
+    "PortalSelectors",
+    "Selector",
+    "NewsCollectorService",
+    "PortalRegistrationService",
+    "build_container",
+]
