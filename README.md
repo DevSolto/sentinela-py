@@ -9,7 +9,7 @@ A solução foi organizada em camadas para favorecer separação de responsabili
 - **Domain**: entidades (`Portal`, `Article`), objetos de valor (`Selector`) e contratos de repositório.
 - **Application**: serviços de caso de uso (`PortalRegistrationService`, `NewsCollectorService`).
 - **Infrastructure**: implementação de scraping com Requests + BeautifulSoup, repositórios MongoDB e construção do container de dependências.
-- **CLI**: interface de linha de comando para cadastro de portais, coleta e listagem de notícias.
+- **API**: camada REST construída com FastAPI expondo operações de cadastro de portais, coleta e consulta de notícias.
 
 Essa separação facilita a substituição de componentes (por exemplo, outro banco de dados ou motor de scraping) sem alterar as camadas superiores.
 
@@ -36,55 +36,59 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-## Cadastro de portal
+## Executando a API
 
-Crie um arquivo JSON descrevendo o portal e seletores CSS necessários. Exemplo (`exemplo_portal.json`):
-
-```json
-{
-  "name": "Noticias Exemplo",
-  "base_url": "https://www.exemplo.com",
-  "listing_path_template": "/arquivo/{date}",
-  "date_format": "%Y-%m-%d",
-  "headers": {
-    "User-Agent": "Mozilla/5.0"
-  },
-  "selectors": {
-    "listing_article": {"query": "article.card"},
-    "listing_title": {"query": "h2 a"},
-    "listing_url": {"query": "h2 a", "attribute": "href"},
-    "listing_summary": {"query": "p.resumo"},
-    "article_content": {"query": "div.conteudo"},
-    "article_date": {"query": "time", "attribute": "datetime"}
-  }
-}
-```
-
-Registre o portal através da CLI:
+Após instalar o pacote, inicie a API REST com o comando:
 
 ```bash
-sentinela register-portal exemplo_portal.json
+sentinela-api
 ```
 
-## Coleta de notícias
+O serviço utiliza o FastAPI e fica disponível por padrão em `http://127.0.0.1:8000`. A documentação interativa pode ser acessada em `http://127.0.0.1:8000/docs`.
 
-Execute a coleta informando o portal e o intervalo de datas (formato `YYYY-MM-DD`). Se a data final for omitida, usa-se apenas a data inicial.
+### Cadastro de portal (`POST /portals`)
+
+Envie o corpo JSON com a configuração do portal:
 
 ```bash
-sentinela collect "Noticias Exemplo" 2024-05-01 2024-05-03
+curl -X POST http://127.0.0.1:8000/portals \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "Noticias Exemplo",
+        "base_url": "https://www.exemplo.com",
+        "listing_path_template": "/arquivo/{date}",
+        "selectors": {
+          "listing_article": {"query": "article.card"},
+          "listing_title": {"query": "h2 a"},
+          "listing_url": {"query": "h2 a", "attribute": "href"},
+          "listing_summary": {"query": "p.resumo"},
+          "article_content": {"query": "div.conteudo"},
+          "article_date": {"query": "time", "attribute": "datetime"}
+        }
+      }'
 ```
 
-Os artigos coletados são salvos na coleção `articles`. O serviço evita duplicidade verificando URL + portal.
-
-## Listar notícias
-
-Para consultar artigos persistidos em um intervalo:
+### Listagem de portais (`GET /portals`)
 
 ```bash
-sentinela list-articles "Noticias Exemplo" 2024-05-01 2024-05-03
+curl http://127.0.0.1:8000/portals
 ```
 
-Cada linha da saída é um JSON com título, URL e data de publicação.
+### Coleta de notícias (`POST /collect`)
+
+```bash
+curl -X POST http://127.0.0.1:8000/collect \
+  -H "Content-Type: application/json" \
+  -d '{"portal": "Noticias Exemplo", "start_date": "2024-05-01", "end_date": "2024-05-03"}'
+```
+
+### Consulta de artigos (`GET /articles`)
+
+```bash
+curl "http://127.0.0.1:8000/articles?portal=Noticias%20Exemplo&start_date=2024-05-01&end_date=2024-05-03"
+```
+
+As respostas são retornadas em JSON, incluindo o conteúdo completo e a data de publicação das notícias.
 
 ## Testes
 
