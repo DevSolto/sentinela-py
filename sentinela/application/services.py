@@ -101,7 +101,11 @@ class NewsCollectorService:
         return self._article_repository.list_by_period(portal_name, start_dt, end_dt)
 
     def collect_all_for_portal(
-        self, portal_name: str, start_page: int = 1, max_pages: int | None = None
+        self,
+        portal_name: str,
+        start_page: int = 1,
+        max_pages: int | None = None,
+        min_published_date: date | None = None,
     ) -> List[Article]:
         log = logging.getLogger("sentinela.service")
         portal = self._portal_repository.get_by_name(portal_name)
@@ -111,6 +115,7 @@ class NewsCollectorService:
         total_seen = 0
         total_skipped_in_run = 0
         total_skipped_existing_db = 0
+        total_skipped_by_date = 0
         page = max(1, start_page)
         pages_processed = 0
         saved_urls: set[str] = set()
@@ -129,23 +134,37 @@ class NewsCollectorService:
                 break
 
             # Coleta apenas uma página usando o scraper existente por paginação.
+            current_page = page
             start_ts = time.perf_counter()
             collected = self._scraper.collect_all(
-                portal, start_page=page, max_pages=1
+                portal, start_page=current_page, max_pages=1
             )
             elapsed = time.perf_counter() - start_ts
             if not collected:
                 status(
-                    f"Portal '{portal_name}': página {page} sem itens, encerrando."
+                    f"Portal '{portal_name}': página {current_page} sem itens, encerrando."
                 )
                 break
 
-            page_seen = len(collected)
-            total_seen += page_seen
+            page_seen_raw = len(collected)
+            total_seen += page_seen_raw
             # Filtra duplicados existentes no banco e duplicados dentro do mesmo run
             new_articles: List[Article] = []
             page_skipped_in_run = 0
             page_skipped_existing_db = 0
+            page_skipped_by_date = 0
+            stop_due_to_min_date = False
+
+            if min_published_date is not None:
+                filtered: List[Article] = []
+                for article in collected:
+                    if article.published_at.date() < min_published_date:
+                        page_skipped_by_date += 1
+                        stop_due_to_min_date = True
+                        continue
+                    filtered.append(article)
+                collected = filtered
+
             for a in collected:
                 if a.url in saved_urls:
                     page_skipped_in_run += 1
@@ -155,8 +174,10 @@ class NewsCollectorService:
                     saved_urls.add(a.url)
                 else:
                     page_skipped_existing_db += 1
+            page_seen_considered = len(collected)
             total_skipped_in_run += page_skipped_in_run
             total_skipped_existing_db += page_skipped_existing_db
+            total_skipped_by_date += page_skipped_by_date
 
             # Salva incrementalmente
             if new_articles:
@@ -165,13 +186,50 @@ class NewsCollectorService:
                 all_new.extend(new_articles)
 
             status(
-                f"Página {page}: itens {page_seen}, novos {len(new_articles)}, descartados(run) {page_skipped_in_run}, descartados(db) {page_skipped_existing_db} | Tempo {elapsed:.2f}s | Totais: vistos {total_seen}, novos {total_new}, descartados(run) {total_skipped_in_run}, descartados(db) {total_skipped_existing_db}"
+                "Página {page}: itens {page_seen_raw}, considerados {page_seen_considered}, novos {len_new}, "
+                "descartados(run) {skip_run}, descartados(db) {skip_db}, descartados(data) {skip_date} | "
+                "Tempo {elapsed:.2f}s | Totais: vistos {total_seen}, novos {total_new}, descartados(run) {total_skip_run}, "
+                "descartados(db) {total_skip_db}, descartados(data) {total_skip_date}"
+                .format(
+                    page=current_page,
+                    page_seen_raw=page_seen_raw,
+                    page_seen_considered=page_seen_considered,
+                    len_new=len(new_articles),
+                    skip_run=page_skipped_in_run,
+                    skip_db=page_skipped_existing_db,
+                    skip_date=page_skipped_by_date,
+                    elapsed=elapsed,
+                    total_seen=total_seen,
+                    total_new=total_new,
+                    total_skip_run=total_skipped_in_run,
+                    total_skip_db=total_skipped_existing_db,
+                    total_skip_date=total_skipped_by_date,
+                )
             )
 
             page += 1
             pages_processed += 1
 
+            if stop_due_to_min_date:
+                status(
+                    "Portal '{portal}': data mínima {date} atingida na página {page}, encerrando."
+                    .format(
+                        portal=portal_name,
+                        date=min_published_date.isoformat(),
+                        page=current_page,
+                    )
+                )
+                break
+
         log.info(
-            f"Concluído. Páginas: {pages_processed}, vistos: {total_seen}, novos: {total_new}, descartados(run): {total_skipped_in_run}, descartados(db): {total_skipped_existing_db}"
+            "Concluído. Páginas: {pages}, vistos: {seen}, novos: {new}, descartados(run): {skip_run}, "
+            "descartados(db): {skip_db}, descartados(data): {skip_date}".format(
+                pages=pages_processed,
+                seen=total_seen,
+                new=total_new,
+                skip_run=total_skipped_in_run,
+                skip_db=total_skipped_existing_db,
+                skip_date=total_skipped_by_date,
+            )
         )
         return all_new
