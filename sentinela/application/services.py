@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, List
 import sys
 import logging
+import time
 
 from sentinela.domain.entities import Article, Portal
 from sentinela.domain.repositories import ArticleRepository, PortalRepository
@@ -126,9 +127,11 @@ class NewsCollectorService:
                 break
 
             # Coleta apenas uma página usando o scraper existente por paginação.
+            start_ts = time.perf_counter()
             collected = self._scraper.collect_all(
                 portal, start_page=page, max_pages=1
             )
+            elapsed = time.perf_counter() - start_ts
             if not collected:
                 status(
                     f"Portal '{portal_name}': página {page} sem itens, encerrando."
@@ -153,7 +156,7 @@ class NewsCollectorService:
                 all_new.extend(new_articles)
 
             status(
-                f"Página {page}: itens {page_seen}, novos salvos {len(new_articles)} | Total: vistos {total_seen}, novos {total_new}"
+                f"Página {page}: itens {page_seen}, novos salvos {len(new_articles)} | Tempo {elapsed:.2f}s | Total: vistos {total_seen}, novos {total_new}"
             )
 
             page += 1
