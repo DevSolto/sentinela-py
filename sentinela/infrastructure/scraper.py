@@ -52,11 +52,16 @@ class RequestsSoupScraper(Scraper):
                 self._log.warning("item %d: falha ao obter título/URL: %s", idx, exc)
                 continue
             self._log.debug("item %d: %s -> %s", idx, title, url)
-            summary = (
-                self._extract_value(element, portal.selectors.listing_summary)
-                if portal.selectors.listing_summary
-                else None
-            )
+            summary = None
+            if portal.selectors.listing_summary:
+                try:
+                    summary = self._extract_value(
+                        element, portal.selectors.listing_summary
+                    )
+                except Exception as exc:
+                    self._log.debug(
+                        "item %d: resumo ausente, seguindo sem resumo: %s", idx, exc
+                    )
             self._log.debug("GET artigo %s", url)
             try:
                 article_response = self._session.get(url, headers=portal.headers)
@@ -137,11 +142,19 @@ class RequestsSoupScraper(Scraper):
                     self._log.warning("page %d item %d: falha título/URL: %s", page, i, exc)
                     continue
                 self._log.debug("page %d item %d: %s -> %s", page, i, title, url)
-                summary = (
-                    self._extract_value(element, portal.selectors.listing_summary)
-                    if portal.selectors.listing_summary
-                    else None
-                )
+                summary = None
+                if portal.selectors.listing_summary:
+                    try:
+                        summary = self._extract_value(
+                            element, portal.selectors.listing_summary
+                        )
+                    except Exception as exc:
+                        self._log.debug(
+                            "page %d item %d: resumo ausente, seguindo sem resumo: %s",
+                            page,
+                            i,
+                            exc,
+                        )
                 self._log.debug("GET artigo %s", url)
                 try:
                     article_response = self._session.get(url, headers=portal.headers)
