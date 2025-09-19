@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Iterable, List
+from typing import Callable, Iterable, List
 import sys
 import logging
 
@@ -46,7 +46,11 @@ class NewsCollectorService:
         self._scraper = scraper
 
     def collect(
-        self, portal_name: str, start_date: date, end_date: date
+        self,
+        portal_name: str,
+        start_date: date,
+        end_date: date,
+        status_callback: Callable[[str], None] | None = None,
     ) -> List[Article]:
         if start_date > end_date:
             raise ValueError("start_date must be earlier than end_date")
@@ -55,9 +59,18 @@ class NewsCollectorService:
         if not portal:
             raise ValueError(f"Portal '{portal_name}' not found")
 
+        if status_callback:
+            status_callback(
+                f"Iniciando coleta para '{portal_name}' entre {start_date} e {end_date}"
+            )
+
         collected: List[Article] = []
         current = start_date
         while current <= end_date:
+            if status_callback:
+                status_callback(
+                    f"Buscando artigos de {current.isoformat()}"
+                )
             day_articles = self._scraper.collect_for_date(portal, current)
             new_articles = [
                 article
@@ -67,7 +80,16 @@ class NewsCollectorService:
             if new_articles:
                 self._article_repository.save_many(new_articles)
                 collected.extend(new_articles)
+            if status_callback:
+                status_callback(
+                    f"{current.isoformat()}: encontrados {len(day_articles)} artigos, "
+                    f"novos salvos {len(new_articles)}"
+                )
             current += timedelta(days=1)
+        if status_callback:
+            status_callback(
+                f"Coleta finalizada para '{portal_name}'. Total de novos artigos: {len(collected)}"
+            )
         return collected
 
     def list_articles(

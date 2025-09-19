@@ -1,12 +1,15 @@
 """REST API entrypoint for Sentinela."""
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import date
 from typing import Any, Dict, Iterable
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
+from sse_starlette.sse import EventSourceResponse
 
 from sentinela.container import build_container
 from sentinela.domain.entities import Article, Portal, PortalSelectors, Selector
@@ -175,6 +178,68 @@ def create_app() -> FastAPI:
             collected=len(articles),
             articles=[map_article_response(article) for article in articles],
         )
+
+    @app.post("/collect/stream")
+    async def collect_articles_stream(
+        request: Request, payload: CollectRequest
+    ) -> EventSourceResponse:
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
+
+        def push(event: str, data: str) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, {"event": event, "data": data})
+
+        def finish() -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        def status_callback(message: str) -> None:
+            push("log", message)
+
+        async def run_collection() -> None:
+            try:
+                end_date = payload.end_date or payload.start_date
+                articles = await loop.run_in_executor(
+                    None,
+                    lambda: container.collector_service.collect(
+                        payload.portal,
+                        payload.start_date,
+                        end_date,
+                        status_callback=status_callback,
+                    ),
+                )
+                response = CollectResponse(
+                    portal=payload.portal,
+                    collected=len(articles),
+                    articles=[map_article_response(article) for article in articles],
+                )
+                push("summary", json.dumps(response.model_dump()))
+            except ValueError as exc:
+                push("error", str(exc))
+            except Exception:
+                push(
+                    "error",
+                    "Erro inesperado durante a coleta de artigos. Verifique os logs do servidor.",
+                )
+            finally:
+                finish()
+
+        task = asyncio.create_task(run_collection())
+
+        async def event_generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        task.cancel()
+                        break
+                    event = await queue.get()
+                    if event is None:
+                        break
+                    yield event
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return EventSourceResponse(event_generator())
 
     @app.get("/articles", response_model=list[ArticleResponse])
     def list_articles(portal: str, start_date: date, end_date: date) -> Iterable[ArticleResponse]:
