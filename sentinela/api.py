@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any, Dict, Iterable
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -255,9 +256,8 @@ def selector_to_dict(selector: Selector) -> Dict[str, Any]:
 
 def run() -> None:
     """Run the API using Uvicorn."""
-
+    load_dotenv()
     uvicorn.run("sentinela.api:create_app", host="0.0.0.0", port=8000, factory=True)
 
 
 __all__ = ["create_app", "run"]
-

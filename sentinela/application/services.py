@@ -109,6 +109,8 @@ class NewsCollectorService:
             raise ValueError(f"Portal '{portal_name}' not found")
         total_new = 0
         total_seen = 0
+        total_skipped_in_run = 0
+        total_skipped_existing_db = 0
         page = max(1, start_page)
         pages_processed = 0
         saved_urls: set[str] = set()
@@ -142,12 +144,19 @@ class NewsCollectorService:
             total_seen += page_seen
             # Filtra duplicados existentes no banco e duplicados dentro do mesmo run
             new_articles: List[Article] = []
+            page_skipped_in_run = 0
+            page_skipped_existing_db = 0
             for a in collected:
                 if a.url in saved_urls:
+                    page_skipped_in_run += 1
                     continue
                 if not self._article_repository.exists(a.portal_name, a.url):
                     new_articles.append(a)
                     saved_urls.add(a.url)
+                else:
+                    page_skipped_existing_db += 1
+            total_skipped_in_run += page_skipped_in_run
+            total_skipped_existing_db += page_skipped_existing_db
 
             # Salva incrementalmente
             if new_articles:
@@ -156,13 +165,13 @@ class NewsCollectorService:
                 all_new.extend(new_articles)
 
             status(
-                f"Página {page}: itens {page_seen}, novos salvos {len(new_articles)} | Tempo {elapsed:.2f}s | Total: vistos {total_seen}, novos {total_new}"
+                f"Página {page}: itens {page_seen}, novos {len(new_articles)}, descartados(run) {page_skipped_in_run}, descartados(db) {page_skipped_existing_db} | Tempo {elapsed:.2f}s | Totais: vistos {total_seen}, novos {total_new}, descartados(run) {total_skipped_in_run}, descartados(db) {total_skipped_existing_db}"
             )
 
             page += 1
             pages_processed += 1
 
         log.info(
-            f"Concluído. Páginas: {pages_processed}, vistos: {total_seen}, novos salvos: {total_new}"
+            f"Concluído. Páginas: {pages_processed}, vistos: {total_seen}, novos: {total_new}, descartados(run): {total_skipped_in_run}, descartados(db): {total_skipped_existing_db}"
         )
         return all_new

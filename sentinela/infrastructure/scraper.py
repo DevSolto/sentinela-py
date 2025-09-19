@@ -45,8 +45,12 @@ class RequestsSoupScraper(Scraper):
         articles: List[Article] = []
         self._log.info("%d itens na listagem", len(article_elements))
         for idx, element in enumerate(article_elements, start=1):
-            title = self._extract_value(element, portal.selectors.listing_title)
-            url = self._extract_url(element, portal)
+            try:
+                title = self._extract_value(element, portal.selectors.listing_title)
+                url = self._extract_url(element, portal)
+            except Exception as exc:
+                self._log.warning("item %d: falha ao obter título/URL: %s", idx, exc)
+                continue
             self._log.debug("item %d: %s -> %s", idx, title, url)
             summary = (
                 self._extract_value(element, portal.selectors.listing_summary)
@@ -54,12 +58,28 @@ class RequestsSoupScraper(Scraper):
                 else None
             )
             self._log.debug("GET artigo %s", url)
-            article_response = self._session.get(url, headers=portal.headers)
-            article_response.raise_for_status()
-            article_soup = BeautifulSoup(article_response.text, "html.parser")
-            content = self._extract_value(article_soup, portal.selectors.article_content)
-            published_at_raw = self._extract_value(article_soup, portal.selectors.article_date)
-            published_at = self._parse_datetime(published_at_raw, portal.date_format)
+            try:
+                article_response = self._session.get(url, headers=portal.headers)
+                article_response.raise_for_status()
+                article_soup = BeautifulSoup(article_response.text, "html.parser")
+            except Exception as exc:
+                self._log.warning("falha ao abrir artigo %s: %s", url, exc)
+                continue
+
+            raw_map = {"listing_url": listing_url, "selectors": asdict(portal.selectors)}
+            try:
+                content = self._extract_value(article_soup, portal.selectors.article_content)
+            except Exception as exc:
+                self._log.warning("conteúdo ausente em %s: %s", url, exc)
+                content = ""
+                raw_map["content_missing"] = True
+            try:
+                published_at_raw = self._extract_value(article_soup, portal.selectors.article_date)
+                published_at = self._parse_datetime(published_at_raw, portal.date_format)
+            except Exception as exc:
+                self._log.warning("data ausente/ inválida em %s: %s", url, exc)
+                published_at = datetime.utcnow()
+                raw_map["date_missing"] = True
 
             articles.append(
                 Article(
@@ -69,10 +89,7 @@ class RequestsSoupScraper(Scraper):
                     content=content,
                     published_at=published_at,
                     summary=summary,
-                    raw={
-                        "listing_url": listing_url,
-                        "selectors": asdict(portal.selectors),
-                    },
+                    raw=raw_map,
                 )
             )
 
@@ -113,8 +130,12 @@ class RequestsSoupScraper(Scraper):
 
             self._log.info("page %d: %d itens", page, len(elements))
             for i, element in enumerate(elements, start=1):
-                title = self._extract_value(element, portal.selectors.listing_title)
-                url = self._extract_url(element, portal)
+                try:
+                    title = self._extract_value(element, portal.selectors.listing_title)
+                    url = self._extract_url(element, portal)
+                except Exception as exc:
+                    self._log.warning("page %d item %d: falha título/URL: %s", page, i, exc)
+                    continue
                 self._log.debug("page %d item %d: %s -> %s", page, i, title, url)
                 summary = (
                     self._extract_value(element, portal.selectors.listing_summary)
@@ -122,19 +143,33 @@ class RequestsSoupScraper(Scraper):
                     else None
                 )
                 self._log.debug("GET artigo %s", url)
-                article_response = self._session.get(url, headers=portal.headers)
-                article_response.raise_for_status()
-                article_soup = BeautifulSoup(article_response.text, "html.parser")
-                content = self._extract_value(article_soup, portal.selectors.article_content)
-                published_at_raw = self._extract_value(
-                    article_soup, portal.selectors.article_date
-                )
-                # Clean possible prefix like 'em 17 de ...'
-                published_at_raw = published_at_raw.strip()
-                if published_at_raw.lower().startswith("em "):
-                    published_at_raw = published_at_raw[3:].strip()
-                published_at = self._parse_datetime(published_at_raw, portal.date_format)
-
+                try:
+                    article_response = self._session.get(url, headers=portal.headers)
+                    article_response.raise_for_status()
+                    article_soup = BeautifulSoup(article_response.text, "html.parser")
+                except Exception as exc:
+                    self._log.warning("falha ao abrir artigo %s: %s", url, exc)
+                    continue
+                raw_map = {"listing_url": listing_url}
+                try:
+                    content = self._extract_value(article_soup, portal.selectors.article_content)
+                except Exception as exc:
+                    self._log.warning("conteúdo ausente em %s: %s", url, exc)
+                    content = ""
+                    raw_map["content_missing"] = True
+                try:
+                    published_at_raw = self._extract_value(
+                        article_soup, portal.selectors.article_date
+                    )
+                    # Clean possible prefix like 'em 17 de ...'
+                    published_at_raw = published_at_raw.strip()
+                    if published_at_raw.lower().startswith("em "):
+                        published_at_raw = published_at_raw[3:].strip()
+                    published_at = self._parse_datetime(published_at_raw, portal.date_format)
+                except Exception as exc:
+                    self._log.warning("data ausente/ inválida em %s: %s", url, exc)
+                    published_at = datetime.utcnow()
+                    raw_map["date_missing"] = True
                 articles.append(
                     Article(
                         portal_name=portal.name,
@@ -143,7 +178,7 @@ class RequestsSoupScraper(Scraper):
                         content=content,
                         published_at=published_at,
                         summary=summary,
-                        raw={"listing_url": listing_url},
+                        raw=raw_map,
                     )
                 )
 
@@ -157,17 +192,33 @@ class RequestsSoupScraper(Scraper):
         return urljoin(portal.base_url, raw_url)
 
     def _extract_value(self, element, selector: Selector) -> str:
+        """Extract text or attribute by CSS selector, tolerant to minor changes.
+
+        Instead of raising immediately when the selector is not found, try a
+        couple of common fallbacks and only then raise. This reduces hard
+        failures when a portal slightly changes its HTML structure.
+        """
+        # Primary attempt
+        target = element.select_one(selector.query)
+
+        # Fallback 1: if query ends with ' > *:first-child', try parent
+        if not target and selector.query.endswith(":first-child"):
+            simplified = selector.query.replace(" > *:first-child", "").replace(
+                ":first-child", ""
+            )
+            target = element.select_one(simplified)
+
+        # If still not found, raise with a clear message
+        if not target:
+            raise ValueError(f"Selector '{selector.query}' not found")
+
         if selector.attribute:
-            target = element.select_one(selector.query)
-            if not target or selector.attribute not in target.attrs:
+            if selector.attribute not in target.attrs:
                 raise ValueError(
                     f"Attribute '{selector.attribute}' not found for selector '{selector.query}'"
                 )
-            return target.attrs[selector.attribute].strip()
+            return str(target.attrs[selector.attribute]).strip()
 
-        target = element.select_one(selector.query)
-        if not target:
-            raise ValueError(f"Selector '{selector.query}' not found")
         return target.get_text(strip=True)
 
     def _parse_datetime(self, value: str, date_format: str) -> datetime:

@@ -10,6 +10,8 @@ Requires-Dist: beautifulsoup4>=4.12
 Requires-Dist: pymongo>=4.6
 Requires-Dist: fastapi>=0.111
 Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: sse-starlette>=2.0
+Requires-Dist: python-dotenv>=1.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.4; extra == "dev"
 

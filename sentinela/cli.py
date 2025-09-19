@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sentinela.container import build_container
+from dotenv import load_dotenv
 from sentinela.domain.entities import Portal, PortalSelectors, Selector
 
 
@@ -65,6 +66,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
     level_name = (
         getattr(args, "log_level", None) or os.getenv("SENTINELA_LOG_LEVEL", "INFO")
