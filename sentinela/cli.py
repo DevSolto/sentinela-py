@@ -53,6 +53,11 @@ def parse_args() -> argparse.Namespace:
     collect_all.add_argument(
         "--max-pages", type=int, default=None, help="Limite de páginas a varrer"
     )
+    collect_all.add_argument(
+        "--min-date",
+        default=None,
+        help="Data mínima dos artigos no formato YYYY-MM-DD (inclusive)",
+    )
 
     # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
     for sp in (register, collect, list_articles, collect_all):
@@ -107,8 +112,12 @@ def main() -> None:
                 )
             )
     elif args.command == "collect-all":
+        min_date = _parse_date(args.min_date) if args.min_date else None
         new_articles = container.collector_service.collect_all_for_portal(
-            args.portal, start_page=args.start_page, max_pages=args.max_pages
+            args.portal,
+            start_page=args.start_page,
+            max_pages=args.max_pages,
+            min_published_date=min_date,
         )
         print(
             f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
