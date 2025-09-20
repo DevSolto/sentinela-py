@@ -36,6 +36,10 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+## CLI (`sentinela-cli`)
+
+Após a instalação, o utilitário de linha de comando `sentinela-cli` fica disponível para registrar portais, executar coletas e consultar artigos diretamente do terminal. Consulte a [documentação detalhada](docs/cli.md) para exemplos, opções e variáveis de ambiente suportadas.
+
 ## Executando a API
 
 Após instalar o pacote, inicie a API REST com o comando:
