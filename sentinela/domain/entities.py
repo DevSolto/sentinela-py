@@ -46,6 +46,11 @@ class Portal:
     def listing_url_for(self, target_date: datetime) -> str:
         """Build the URL used to fetch the listing for a given date."""
 
+        if "{date}" not in self.listing_path_template:
+            raise ValueError(
+                "O template de listagem deve conter '{date}' para coleta por data. "
+                "Use o comando 'collect-all' ou configure listing_path_template com '{date}'."
+            )
         formatted_date = target_date.strftime(self.date_format)
         path = self.listing_path_template.format(date=formatted_date)
         return f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"

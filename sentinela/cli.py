@@ -92,7 +92,13 @@ def main() -> None:
     elif args.command == "collect":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date) if args.end_date else start_date
-        articles = container.collector_service.collect(args.portal, start_date, end_date)
+        try:
+            articles = container.collector_service.collect(
+                args.portal, start_date, end_date
+            )
+        except ValueError as exc:
+            print(str(exc))
+            return
         print(f"{len(articles)} novas notícias coletadas para '{args.portal}'.")
     elif args.command == "list-articles":
         start_date = _parse_date(args.start_date)
