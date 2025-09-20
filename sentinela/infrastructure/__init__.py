@@ -5,6 +5,7 @@ Exposes concrete implementations and helpers so consumers can import from
 """
 
 from .database import MongoClientFactory, MongoSettings
+from .extraction import MongoNewsRepository, PostgresExtractionResultWriter
 from .repositories import MongoArticleRepository, MongoPortalRepository
 from .scraper import RequestsSoupScraper, Scraper
 
@@ -13,6 +14,8 @@ __all__ = [
     "MongoClientFactory",
     "MongoPortalRepository",
     "MongoArticleRepository",
+    "MongoNewsRepository",
+    "PostgresExtractionResultWriter",
     "Scraper",
     "RequestsSoupScraper",
 ]
