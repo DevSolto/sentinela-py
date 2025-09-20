@@ -4,11 +4,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict
 from datetime import date, datetime
+import logging
+import string
 from typing import List
 from urllib.parse import urljoin
 
 import requests
-import logging
 from bs4 import BeautifulSoup
 
 from sentinela.domain.entities import Article, Portal, Selector
@@ -252,12 +253,41 @@ class RequestsSoupScraper(Scraper):
                 "novembro": "11",
                 "dezembro": "12",
             }
-            lowered = value.strip().lower()
+            normalized_value = value.strip().lower()
             for name, num in months.items():
-                if name in lowered:
-                    lowered = lowered.replace(name, num)
+                if name in normalized_value:
+                    normalized_value = normalized_value.replace(name, num)
                     break
             # Replace %B with %m in the format to match the numeric month we just injected
             numeric_format = date_format.replace("%B", "%m")
-            return datetime.strptime(lowered, numeric_format)
+            normalized_format = self._normalize_format_literals(numeric_format)
+            return datetime.strptime(normalized_value, normalized_format)
         return datetime.strptime(value, date_format)
+
+    def _normalize_format_literals(self, format_str: str) -> str:
+        """Lowercase literal fragments of a strptime format string."""
+
+        result: list[str] = []
+        i = 0
+        while i < len(format_str):
+            char = format_str[i]
+            if char == "%":
+                start = i
+                i += 1
+                if i < len(format_str) and format_str[i] == "%":
+                    # Escaped percent, keep as-is
+                    i += 1
+                    result.append("%%")
+                    continue
+                # Consume optional modifiers until we reach the directive char
+                while i < len(format_str) and format_str[i] not in string.ascii_letters:
+                    i += 1
+                if i < len(format_str):
+                    i += 1
+                result.append(format_str[start:i])
+            else:
+                start = i
+                while i < len(format_str) and format_str[i] != "%":
+                    i += 1
+                result.append(format_str[start:i].lower())
+        return "".join(result)
