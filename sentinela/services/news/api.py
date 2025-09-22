@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 
 import uvicorn
 from dotenv import load_dotenv
@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from sentinela.domain.entities import Article
 from sentinela.services.news import NewsContainer, build_news_container
+from sentinela.services.extraction import notify_news_ready
 
 
 class CollectRequest(BaseModel):
@@ -43,6 +44,26 @@ class CollectResponse(BaseModel):
     collected: int
     articles: list[ArticleResponse]
 
+
+class ExtractionReadyRequest(BaseModel):
+    """Payload used to notify the extraction service about a new article."""
+
+    portal: str
+    title: str
+    url: str
+    content: str
+    published_at: str
+    summary: str | None = None
+
+    def to_article(self) -> Article:
+        return Article(
+            portal_name=self.portal,
+            title=self.title,
+            url=self.url,
+            content=self.content,
+            published_at=datetime.fromisoformat(self.published_at),
+            summary=self.summary,
+        )
 
 def configure_cors(app: FastAPI) -> None:
     """Apply the default CORS configuration used by the services."""
@@ -86,11 +107,20 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
         except ValueError as exc:
             raise handle_value_error(exc)
 
-        return CollectResponse(
+        response = CollectResponse(
             portal=request.portal,
             collected=len(articles),
             articles=[map_article_response(article) for article in articles],
         )
+        if articles:
+            notify_news_ready(articles)
+        return response
+
+    @router.post('/extraction/ready')
+    def publish_for_extraction(request: ExtractionReadyRequest) -> dict[str, int]:
+        article = request.to_article()
+        notify_news_ready([article])
+        return {"queued": 1}
 
     @router.post("/collect/stream")
     async def collect_articles_stream(
