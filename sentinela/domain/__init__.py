@@ -12,6 +12,7 @@ from .entities import (
     PortalSelectors,
     Selector,
 )
+from .ports import ArticleSink, PortalGateway
 from .repositories import ArticleRepository, PortalRepository
 
 __all__ = [
@@ -21,4 +22,6 @@ __all__ = [
     "Article",
     "PortalRepository",
     "ArticleRepository",
+    "PortalGateway",
+    "ArticleSink",
 ]

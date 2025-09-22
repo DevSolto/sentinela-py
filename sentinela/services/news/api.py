@@ -147,7 +147,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
                         payload.portal,
                         payload.start_date,
                         end_date,
-                        status_callback=status_callback,
+                        status_publisher=status_callback,
                     ),
                 )
                 response = CollectResponse(

@@ -16,6 +16,7 @@ from sentinela.services.publications import (
     PublicationsContainer,
     build_publications_container,
 )
+from sentinela.services.publications.adapters import create_ingestion_router
 
 
 class EnrichedCandidateResponse(BaseModel):
@@ -172,6 +173,8 @@ def include_routes(
         return [map_article_response(article) for article in articles]
 
     app.include_router(router)
+    ingestion_router = create_ingestion_router(container.article_repository)
+    app.include_router(ingestion_router, prefix=prefix)
 
 
 def create_app() -> FastAPI:
