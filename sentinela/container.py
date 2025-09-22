@@ -1,42 +1,28 @@
-"""Dependency container wiring infrastructure components."""
+"""Backward-compatible shim for legacy container imports."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sentinela.application.services import (
-    NewsCollectorService,
-    PortalRegistrationService,
-)
-from sentinela.infrastructure.database import MongoClientFactory
-from sentinela.infrastructure.repositories import (
-    MongoArticleRepository,
-    MongoPortalRepository,
-)
-from sentinela.infrastructure.scraper import RequestsSoupScraper
+from sentinela.application.services import NewsCollectorService, PortalRegistrationService
+from sentinela.services.news import build_news_container
+from sentinela.services.portals import build_portals_container
 
 
 @dataclass
 class Container:
+    """Aggregated container mirroring the legacy structure."""
+
     portal_service: PortalRegistrationService
     collector_service: NewsCollectorService
 
 
 def build_container() -> Container:
-    factory = MongoClientFactory()
-    database = factory.get_database()
+    """Construct combined container using domain-specific builders."""
 
-    portal_repository = MongoPortalRepository(database["portals"])
-    article_repository = MongoArticleRepository(database["articles"])
-    scraper = RequestsSoupScraper()
-
-    portal_service = PortalRegistrationService(portal_repository)
-    collector_service = NewsCollectorService(
-        portal_repository=portal_repository,
-        article_repository=article_repository,
-        scraper=scraper,
-    )
+    portals_container = build_portals_container()
+    news_container = build_news_container()
 
     return Container(
-        portal_service=portal_service,
-        collector_service=collector_service,
+        portal_service=portals_container.portal_service,
+        collector_service=news_container.collector_service,
     )
