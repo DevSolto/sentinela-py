@@ -12,8 +12,9 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from sentinela.container import build_container
 from sentinela.domain.entities import Article, Portal, PortalSelectors, Selector
+from sentinela.services.news import build_news_container
+from sentinela.services.portals import build_portals_container
 
 
 class SelectorPayload(BaseModel):
@@ -111,7 +112,8 @@ class CollectResponse(BaseModel):
 def create_app() -> FastAPI:
     """Create the FastAPI application with all routes configured."""
 
-    container = build_container()
+    portals_container = build_portals_container()
+    news_container = build_news_container()
     app = FastAPI(title="Sentinela API", version="1.0.0")
 
     def map_portal_response(portal: Portal) -> PortalResponse:
@@ -155,20 +157,23 @@ def create_app() -> FastAPI:
     def register_portal(payload: PortalPayload) -> PortalResponse:
         try:
             portal = payload.to_domain()
-            container.portal_service.register(portal)
+            portals_container.portal_service.register(portal)
         except ValueError as exc:  # Portal already exists
             raise handle_value_error(exc)
         return map_portal_response(portal)
 
     @app.get("/portals", response_model=list[PortalResponse])
     def list_portals() -> Iterable[PortalResponse]:
-        return [map_portal_response(portal) for portal in container.portal_service.list_portals()]
+        return [
+            map_portal_response(portal)
+            for portal in portals_container.portal_service.list_portals()
+        ]
 
     @app.post("/collect", response_model=CollectResponse)
     def collect_articles(request: CollectRequest) -> CollectResponse:
         try:
             end_date = request.end_date or request.start_date
-            articles = container.collector_service.collect(
+            articles = news_container.collector_service.collect(
                 request.portal, request.start_date, end_date
             )
         except ValueError as exc:
@@ -201,7 +206,7 @@ def create_app() -> FastAPI:
                 end_date = payload.end_date or payload.start_date
                 articles = await loop.run_in_executor(
                     None,
-                    lambda: container.collector_service.collect(
+                    lambda: news_container.collector_service.collect(
                         payload.portal,
                         payload.start_date,
                         end_date,
@@ -244,7 +249,9 @@ def create_app() -> FastAPI:
 
     @app.get("/articles", response_model=list[ArticleResponse])
     def list_articles(portal: str, start_date: date, end_date: date) -> Iterable[ArticleResponse]:
-        articles = container.collector_service.list_articles(portal, start_date, end_date)
+        articles = news_container.collector_service.list_articles(
+            portal, start_date, end_date
+        )
         return [map_article_response(article) for article in articles]
 
     return app

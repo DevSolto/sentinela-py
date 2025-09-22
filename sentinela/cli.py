@@ -9,9 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sentinela.container import build_container
 from dotenv import load_dotenv
 from sentinela.domain.entities import Portal, PortalSelectors, Selector
+from sentinela.services.news import build_news_container
+from sentinela.services.portals import build_portals_container
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,20 +81,21 @@ def main() -> None:
         level=getattr(logging, str(level_name).upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
-    container = build_container()
+    portals_container = build_portals_container()
+    news_container = build_news_container()
 
     if args.command == "register-portal":
         portal = _load_portal_from_json(args.path)
-        container.portal_service.register(portal)
+        portals_container.portal_service.register(portal)
         print(f"Portal '{portal.name}' cadastrado com sucesso.")
     elif args.command == "list-portals":
-        for portal in container.portal_service.list_portals():
+        for portal in portals_container.portal_service.list_portals():
             print(f"- {portal.name}: {portal.base_url}")
     elif args.command == "collect":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date) if args.end_date else start_date
         try:
-            articles = container.collector_service.collect(
+            articles = news_container.collector_service.collect(
                 args.portal, start_date, end_date
             )
         except ValueError as exc:
@@ -103,7 +105,7 @@ def main() -> None:
     elif args.command == "list-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
-        for article in container.collector_service.list_articles(
+        for article in news_container.collector_service.list_articles(
             args.portal, start_date, end_date
         ):
             print(
@@ -119,7 +121,7 @@ def main() -> None:
             )
     elif args.command == "collect-all":
         min_date = _parse_date(args.min_date) if args.min_date else None
-        new_articles = container.collector_service.collect_all_for_portal(
+        new_articles = news_container.collector_service.collect_all_for_portal(
             args.portal,
             start_page=args.start_page,
             max_pages=args.max_pages,

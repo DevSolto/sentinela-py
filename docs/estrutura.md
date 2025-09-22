@@ -17,7 +17,7 @@ O Sentinela é um coletor modular de notícias com arquitetura em camadas. O dir
 ## Pacote `sentinela`
 
 ### `sentinela/__init__.py`
-Reexporta entidades (`Article`, `Portal`, `PortalSelectors`, `Selector`) e serviços (`NewsCollectorService`, `PortalRegistrationService`) para facilitar importações externas, além da função `build_container` que monta as dependências da aplicação.【F:sentinela/__init__.py†L1-L15】
+Reexporta entidades (`Article`, `Portal`, `PortalSelectors`, `Selector`) e serviços (`NewsCollectorService`, `PortalRegistrationService`) para facilitar importações externas. Também expõe os builders `build_portals_container` e `build_news_container`, além do shim legado `build_container`.【F:sentinela/__init__.py†L1-L18】
 
 ### `sentinela/api.py`
 Define a API REST usando FastAPI. Inclui modelos Pydantic que representam payloads de portais, seletores e artigos, além das rotas:
@@ -37,10 +37,10 @@ Implementa a interface de linha de comando com `argparse`. Os subcomandos dispon
 - `collect <portal> <data_inicial> [data_final]`: solicita coleta de notícias para o intervalo fornecido.
 - `list-articles <portal> <data_inicial> <data_final>`: lista artigos armazenados em formato JSON.
 
-O arquivo inclui utilitários para parse de datas (`_parse_date`) e conversão do JSON em objetos de domínio (`_load_portal_from_json`, `_build_selector`). Tudo é executado através de um container de dependências construído por `build_container`.【F:sentinela/cli.py†L1-L117】
+O arquivo inclui utilitários para parse de datas (`_parse_date`) e conversão do JSON em objetos de domínio (`_load_portal_from_json`, `_build_selector`). As dependências são montadas por `build_portals_container` e `build_news_container`, garantindo que cada serviço carregue apenas o necessário.【F:sentinela/cli.py†L1-L117】
 
 ### `sentinela/container.py`
-Centraliza a composição de dependências. Instancia `MongoClientFactory` para acessar o banco, cria repositórios Mongo (`MongoPortalRepository`, `MongoArticleRepository`), o `RequestsSoupScraper` e monta os serviços de aplicação (`PortalRegistrationService`, `NewsCollectorService`). Retorna um objeto `Container` com referências para os serviços configurados.【F:sentinela/container.py†L1-L40】
+Mantém um shim para compatibilidade retroativa, delegando a criação das dependências para `build_portals_container` e `build_news_container`. Retorna um objeto `Container` agregando os serviços principais para código legado.【F:sentinela/container.py†L1-L26】
 
 ### `sentinela/application/services.py`
 Contém a camada de aplicação (casos de uso):
@@ -98,7 +98,7 @@ Exemplo de configuração de portal em JSON que pode ser reutilizado pelo CLI. M
 ## Fluxo de Dependências
 
 1. **Entrada**: API (`sentinela/api.py`) ou CLI (`sentinela/cli.py`) recebem comandos externos.
-2. **Container**: ambos constroem um `Container` via `build_container`, que resolve repositórios e o scraper concretos.
+2. **Containers**: API/CLI criam `PortalsContainer` ou `NewsContainer` conforme a funcionalidade, isolando dependências por domínio.
 3. **Serviços de Aplicação**: orquestram regras de negócio com base nas entidades do domínio.
 4. **Infraestrutura**: repositórios manipulam MongoDB e o scraper coleta HTML, convertendo dados em entidades.
 5. **Persistência/Resposta**: artigos são salvos e retornados a quem iniciou o fluxo.
