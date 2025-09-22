@@ -42,6 +42,18 @@ Após a instalação, o utilitário de linha de comando `sentinela-cli` fica dis
 
 ## Executando a API
 
+## Serviço de Extração
+
+O microserviço de extração (`sentinela.services.extraction`) consome notícias publicadas para identificar pessoas e cidades mencionadas. Após instalar o pacote execute um dos comandos abaixo:
+
+```bash
+sentinela-extraction-api   # expõe rotas REST (/enqueue, /process, /results)
+sentinela-extraction-worker # executa processamento contínuo por lotes
+```
+
+Configure `NER_VERSION`, `GAZETTEER_VERSION` e `EXTRACTION_GAZETTEER_PATH` para controlar reprocessamentos e catálogo de cidades. A coleta de notícias (`sentinela-news-api`) notifica automaticamente o worker usando o `PendingNewsQueue`, e os resultados ficam disponíveis na API de publicações via `/enriched/articles`.
+
+
 Após instalar o pacote, inicie a API REST com o comando:
 
 ```bash

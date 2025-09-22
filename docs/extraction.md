@@ -87,3 +87,27 @@ O retorno `ProcessedBatchResult` permite alimentar métricas de observabilidade 
 - **Testes**: os testes unitários em `tests/` exemplificam regras de normalização, resolução por gazetteer e o fluxo end-to-end; adapte-os como base para testar implementações concretas ou regressões futuras.【F:tests/test_extraction_normalization.py†L1-L94】【F:tests/test_extraction_gazetteer.py†L1-L83】【F:tests/test_entity_extraction_service.py†L20-L109】
 
 Com essas orientações, basta implementar as integrações concretas para Mongo/Postgres e acoplar o serviço a um agendador (cron, Celery, worker assíncrono) para operar o microserviço de cadastro de Pessoas e Cidades conforme os critérios de sucesso definidos.
+
+## Aplicação FastAPI e Worker
+
+O pacote `sentinela.services.extraction` fornece uma aplicação FastAPI e um worker síncrono para orquestrar o serviço de extração. Ambos reutilizam a classe `EntityExtractionService`, carregando as dependências a partir de variáveis de ambiente ou objetos injetados no código. O comando `sentinela-extraction-api` inicia uma API com rotas para enfileirar notícias (`POST /enqueue`), acionar manualmente o processamento (`POST /process`) e consultar os resultados enriquecidos (`GET /results`, `GET /results/{url}`). Já o comando `sentinela-extraction-worker` executa ciclos contínuos de processamento respeitando `EXTRACTION_WORKER_INTERVAL`.
+
+### Variáveis de ambiente principais
+- `NER_VERSION` e `GAZETTEER_VERSION`: controlam versionamento do pipeline e garantem reprocessamento quando atualizados.
+- `EXTRACTION_NER_FACTORY`: caminho `modulo:callable` utilizado para construir o motor de NER (por padrão usa um *stub* que não gera entidades).
+- `EXTRACTION_GAZETTEER_PATH`: arquivo JSON com registros de cidades carregados em memória pelo `CityGazetteer`.
+- `EXTRACTION_NEWS_BACKEND`: escolha do adaptador de consumo (`queue` para usar `PendingNewsQueue`).
+- `EXTRACTION_RESULT_BACKEND`: backend para persistência (`memory` usa `ExtractionResultStore`).
+- `EXTRACTION_BATCH_SIZE` e `EXTRACTION_WORKER_INTERVAL`: controlam tamanho dos lotes e intervalo em segundos entre execuções do worker.
+
+### Integração entre serviços
+- O serviço de notícias chama `notify_news_ready` ao concluir uma coleta, publicando novos artigos no `PendingNewsQueue` compartilhado. A rota `POST /extraction/ready` permite acionar esse fluxo via API.
+- O serviço de publicações expõe `GET /enriched/articles` e `GET /enriched/articles/{url}` para consultar pessoas e cidades associados à notícia, alimentados pelo `ExtractionResultStore`.
+- Adaptadores prontos (`QueueNewsRepository`, `PublicationsAPIRepository`, `ExtractionResultStoreWriter`) encapsulam filas, chamadas HTTP e gravação em memória, facilitando substituição por implementações específicas.
+
+### Execução local
+1. Carregue as variáveis em um `.env` ou exporte manualmente.
+2. Inicie o backend de notícias/publicações (ex.: `sentinela-news-api`).
+3. Execute `sentinela-extraction-api` para habilitar as rotas de enfileiramento e consulta ou `sentinela-extraction-worker` para um worker contínuo.
+4. Use `POST /collect` na API de notícias ou `POST /extraction/ready` para publicar artigos prontos; os resultados ficam disponíveis em `/results` (extraction) e `/enriched/articles` (publications).
+

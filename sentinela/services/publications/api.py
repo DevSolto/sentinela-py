@@ -18,6 +18,54 @@ from sentinela.services.publications import (
 )
 
 
+class EnrichedCandidateResponse(BaseModel):
+    """Representation of a candidate city resolution."""
+
+    city_id: str
+    name: str
+    uf: str
+    score: float
+
+
+class EnrichedCityResponse(BaseModel):
+    """City occurrence enriched by the extraction pipeline."""
+
+    city_id: str | None
+    surface: str
+    start: int
+    end: int
+    sentence: str
+    status: str
+    uf_surface: str | None
+    method: str
+    confidence: float
+    candidates: list[EnrichedCandidateResponse]
+
+
+class EnrichedPersonResponse(BaseModel):
+    """Person occurrence enriched by the extraction pipeline."""
+
+    person_id: str
+    canonical_name: str
+    surface: str
+    start: int
+    end: int
+    sentence: str
+    method: str
+    confidence: float
+
+
+class EnrichedArticleResponse(BaseModel):
+    """Collection of entities associated with a news article."""
+
+    url: str
+    ner_version: str
+    gazetteer_version: str
+    updated_at: str
+    people: list[EnrichedPersonResponse]
+    cities: list[EnrichedCityResponse]
+
+
 class ArticleResponse(BaseModel):
     """Representation of an article returned by the API."""
 
@@ -47,6 +95,61 @@ def include_routes(
     """Register publication routes on a FastAPI application."""
 
     router = APIRouter(prefix=prefix, tags=["Publicações"])
+
+    def map_enriched(result) -> EnrichedArticleResponse:
+        return EnrichedArticleResponse(
+            url=result.url,
+            ner_version=result.ner_version,
+            gazetteer_version=result.gazetteer_version,
+            updated_at=result.updated_at.isoformat(),
+            people=[
+                EnrichedPersonResponse(
+                    person_id=occ.person_id,
+                    canonical_name=occ.canonical_name,
+                    surface=occ.surface,
+                    start=occ.start,
+                    end=occ.end,
+                    sentence=occ.sentence,
+                    method=occ.method,
+                    confidence=occ.confidence,
+                )
+                for occ in result.people
+            ],
+            cities=[
+                EnrichedCityResponse(
+                    city_id=occ.city_id,
+                    surface=occ.surface,
+                    start=occ.start,
+                    end=occ.end,
+                    sentence=occ.sentence,
+                    status=occ.status,
+                    uf_surface=occ.uf_surface,
+                    method=occ.method,
+                    confidence=occ.confidence,
+                    candidates=[
+                        EnrichedCandidateResponse(
+                            city_id=candidate.city_id,
+                            name=candidate.name,
+                            uf=candidate.uf,
+                            score=candidate.score,
+                        )
+                        for candidate in occ.candidates
+                    ],
+                )
+                for occ in result.cities
+            ],
+        )
+
+    @router.get("/enriched/articles", response_model=list[EnrichedArticleResponse])
+    def list_enriched_articles() -> list[EnrichedArticleResponse]:
+        return [map_enriched(result) for result in container.extraction_store.list()]
+
+    @router.get("/enriched/articles/{url:path}", response_model=EnrichedArticleResponse)
+    def get_enriched_article(url: str) -> EnrichedArticleResponse:
+        result = container.extraction_store.get(url)
+        if not result:
+            raise HTTPException(status_code=404, detail="Resultado não encontrado")
+        return map_enriched(result)
 
     def map_article_response(article: Article) -> ArticleResponse:
         return ArticleResponse(
@@ -99,6 +202,10 @@ def run() -> None:
 
 __all__ = [
     "ArticleResponse",
+    "EnrichedArticleResponse",
+    "EnrichedCandidateResponse",
+    "EnrichedCityResponse",
+    "EnrichedPersonResponse",
     "create_app",
     "configure_cors",
     "include_routes",

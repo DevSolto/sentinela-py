@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sentinela.application.services import ArticleQueryService
 from sentinela.infrastructure.database import MongoClientFactory
 from sentinela.infrastructure.repositories import MongoArticleReadRepository
+from sentinela.services.extraction import ExtractionResultStore, get_default_result_store
 
 
 @dataclass
@@ -14,6 +15,7 @@ class PublicationsContainer:
 
     article_repository: MongoArticleReadRepository
     query_service: ArticleQueryService
+    extraction_store: ExtractionResultStore
 
 
 def build_publications_container(
@@ -30,4 +32,5 @@ def build_publications_container(
     return PublicationsContainer(
         article_repository=article_repository,
         query_service=query_service,
+        extraction_store=get_default_result_store(),
     )
