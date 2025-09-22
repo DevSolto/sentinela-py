@@ -7,7 +7,7 @@ from typing import Iterable
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from sentinela.domain.entities import Article
+from sentinela.domain import Article
 from sentinela.domain.repositories import ArticleRepository
 
 

@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from sentinela.domain.entities import Article
+from sentinela.domain import Article
 from sentinela.services.news import NewsContainer, build_news_container
 from sentinela.services.extraction import notify_news_ready
 

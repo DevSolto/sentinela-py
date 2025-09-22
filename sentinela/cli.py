@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from sentinela.domain.entities import Portal, PortalSelectors, Selector
+from sentinela.domain import Portal, PortalSelectors, Selector
 from sentinela.services.news import build_news_container
 from sentinela.services.portals import build_portals_container
 

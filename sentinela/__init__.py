@@ -3,7 +3,7 @@ from .application.services import NewsCollectorService, PortalRegistrationServic
 from .container import build_container
 from .services.news import build_news_container
 from .services.portals import build_portals_container
-from .domain.entities import Article, Portal, PortalSelectors, Selector
+from .domain import Article, Portal, PortalSelectors, Selector
 
 __all__ = [
     "Article",

@@ -7,7 +7,7 @@ import sys
 import logging
 import time
 
-from sentinela.domain.entities import Article, Portal
+from sentinela.domain import Article, Portal
 from sentinela.domain.ports import ArticleSink, PortalGateway
 from sentinela.domain.repositories import ArticleReadRepository, PortalRepository
 from sentinela.infrastructure.scraper import Scraper

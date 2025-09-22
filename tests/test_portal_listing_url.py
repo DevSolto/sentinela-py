@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from sentinela.domain.entities import Portal, PortalSelectors, Selector
+from sentinela.domain import Portal, PortalSelectors, Selector
 
 
 def _build_portal(listing_template: str) -> Portal:

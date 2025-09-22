@@ -50,18 +50,28 @@ Contém a camada de aplicação (casos de uso):
 
 Ambos os serviços dependem apenas das interfaces de repositório e do componente de scraping, mantendo regras de negócio isoladas.【F:sentinela/application/services.py†L1-L63】【F:sentinela/application/services.py†L65-L96】
 
-### `sentinela/domain/entities.py`
-Define entidades de domínio e objetos de valor utilizando `dataclasses` imutáveis:
+### `sentinela/domain/entities/`
+As entidades do domínio foram divididas em arquivos individuais para facilitar evolução e documentação:
 
-- `Selector`: representa como extrair dados de elementos HTML (seletor CSS e atributo opcional).
-- `PortalSelectors`: agrupa os seletores necessários para listar e detalhar artigos.
-- `Portal`: configurações do portal (URLs base, template de listagem, cabeçalhos e formato de data) com método `listing_url_for` para montar URLs parametrizadas por data.
-- `Article`: encapsula notícias coletadas, com campos para portal, título, URL, conteúdo, data de publicação, resumo e dados brutos.
+- `selector.py`: define `Selector`, especificando a consulta CSS e, opcionalmente, o atributo HTML a ser lido durante a raspagem.【F:sentinela/domain/entities/selector.py†L1-L15】
+- `portal_selectors.py`: agrupa os seletores necessários para listar artigos, extrair detalhes e, se disponível, o resumo apresentado na listagem (`PortalSelectors`).【F:sentinela/domain/entities/portal_selectors.py†L1-L23】
+- `portal.py`: descreve `Portal`, com URLs base, template parametrizado por data, cabeçalhos e método `listing_url_for` para montar a URL diária.【F:sentinela/domain/entities/portal.py†L1-L35】
+- `article.py`: encapsula `Article`, contendo dados normalizados do conteúdo coletado, incluindo resumo opcional e metadados brutos.【F:sentinela/domain/entities/article.py†L1-L21】
 
-Essas classes servem como modelo central utilizado por todas as camadas.【F:sentinela/domain/entities.py†L1-L60】
+Essas classes permanecem o modelo central consumido pelas demais camadas.
 
-### `sentinela/domain/repositories.py`
-Expõe interfaces abstratas `PortalRepository` e `ArticleRepository` com operações mínimas necessárias para cadastro e consulta de portais e artigos. São usadas pelos serviços para garantir inversão de dependência e permitir múltiplas implementações de armazenamento.【F:sentinela/domain/repositories.py†L1-L40】
+### `sentinela/domain/ports/`
+Contém as portas que integram o domínio com serviços externos:
+
+- `portal_gateway.py`: `PortalGateway` define como buscar configurações de portais em serviços remotos.【F:sentinela/domain/ports/portal_gateway.py†L1-L15】
+- `article_sink.py`: `ArticleSink` descreve a publicação de artigos coletados para destinos externos.【F:sentinela/domain/ports/article_sink.py†L1-L14】
+
+### `sentinela/domain/repositories/`
+Reúne os contratos de persistência utilizados pela aplicação:
+
+- `portal_repository.py`: operações de cadastro e consulta de portais (`PortalRepository`).【F:sentinela/domain/repositories/portal_repository.py†L1-L19】
+- `article_repository.py`: escrita e consulta por período de artigos (`ArticleRepository`).【F:sentinela/domain/repositories/article_repository.py†L1-L24】
+- `article_read_repository.py`: acesso somente leitura aos artigos persistidos (`ArticleReadRepository`).【F:sentinela/domain/repositories/article_read_repository.py†L1-L16】
 
 ### `sentinela/infrastructure/database.py`
 Concentra configuração de acesso ao MongoDB:

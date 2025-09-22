@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 
 from pymongo.collection import Collection
 
-from sentinela.domain.entities import Article, Portal, PortalSelectors, Selector
+from sentinela.domain import Article, Portal, PortalSelectors, Selector
 from sentinela.domain.repositories import (
     ArticleReadRepository,
     ArticleRepository,
