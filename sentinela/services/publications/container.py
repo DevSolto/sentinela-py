@@ -1,11 +1,11 @@
-"""Dependency container for publications queries."""
+"""Dependency container for publications queries and ingestion."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from sentinela.application.services import ArticleQueryService
 from sentinela.infrastructure.database import MongoClientFactory
-from sentinela.infrastructure.repositories import MongoArticleReadRepository
+from sentinela.infrastructure.repositories import MongoArticleRepository
 from sentinela.services.extraction import ExtractionResultStore, get_default_result_store
 
 
@@ -13,7 +13,7 @@ from sentinela.services.extraction import ExtractionResultStore, get_default_res
 class PublicationsContainer:
     """Container exposing publication query dependencies."""
 
-    article_repository: MongoArticleReadRepository
+    article_repository: MongoArticleRepository
     query_service: ArticleQueryService
     extraction_store: ExtractionResultStore
 
@@ -26,7 +26,7 @@ def build_publications_container(
     factory = factory or MongoClientFactory()
     database = factory.get_database()
 
-    article_repository = MongoArticleReadRepository(database["articles"])
+    article_repository = MongoArticleRepository(database["articles"])
     query_service = ArticleQueryService(article_repository)
 
     return PublicationsContainer(
