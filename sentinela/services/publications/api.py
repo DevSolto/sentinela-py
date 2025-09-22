@@ -1,15 +1,15 @@
-"""FastAPI application exposing publication read endpoints."""
+"""FastAPI application exposing article publication endpoints."""
 from __future__ import annotations
 
 import os
-from datetime import date
-from typing import Iterable
+from datetime import date, datetime
+from typing import Any, Iterable, List
 
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sentinela.domain.entities import Article
 from sentinela.services.publications import (
@@ -27,6 +27,35 @@ class ArticleResponse(BaseModel):
     content: str
     published_at: str
     summary: str | None = None
+
+
+class ArticlePayload(BaseModel):
+    """Payload representation of an article sent for ingestion."""
+
+    portal: str
+    title: str
+    url: str
+    content: str
+    published_at: datetime
+    summary: str | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+    def to_domain(self) -> Article:
+        return Article(
+            portal_name=self.portal,
+            title=self.title,
+            url=self.url,
+            content=self.content,
+            summary=self.summary,
+            published_at=self.published_at,
+            raw=self.raw,
+        )
+
+
+class ArticleIngestRequest(BaseModel):
+    """Wrapper used when ingesting a batch of articles."""
+
+    articles: List[ArticlePayload]
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -68,6 +97,12 @@ def include_routes(
         articles = container.query_service.list_articles(portal, start_date, end_date)
         return [map_article_response(article) for article in articles]
 
+    @router.post("/articles", response_model=list[ArticleResponse], status_code=201)
+    def ingest_articles(payload: ArticleIngestRequest) -> list[ArticleResponse]:
+        articles = [item.to_domain() for item in payload.articles]
+        created = container.ingestion_adapter.ingest(articles)
+        return [map_article_response(article) for article in created]
+
     app.include_router(router)
 
 
@@ -77,8 +112,8 @@ def create_app() -> FastAPI:
     container = build_publications_container()
     app = FastAPI(
         title="Sentinela Publications API",
-        version="1.0.0",
-        description="Consulta de artigos coletados pelos serviços do Sentinela.",
+        version="1.1.0",
+        description="Cadastro e consulta de artigos coletados pelos serviços do Sentinela.",
     )
     configure_cors(app)
     include_routes(app, container)
@@ -99,8 +134,10 @@ def run() -> None:
 
 __all__ = [
     "ArticleResponse",
+    "ArticleIngestRequest",
     "create_app",
     "configure_cors",
     "include_routes",
     "run",
 ]
+

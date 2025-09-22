@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from sentinela.domain.entities import Portal, PortalSelectors, Selector
 from sentinela.services.news import build_news_container
 from sentinela.services.portals import build_portals_container
+from sentinela.services.publications import build_publications_container
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +84,7 @@ def main() -> None:
     )
     portals_container = build_portals_container()
     news_container = build_news_container()
+    publications_container = build_publications_container()
 
     if args.command == "register-portal":
         portal = _load_portal_from_json(args.path)
@@ -105,7 +107,7 @@ def main() -> None:
     elif args.command == "list-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
-        for article in news_container.collector_service.list_articles(
+        for article in publications_container.query_service.list_articles(
             args.portal, start_date, end_date
         ):
             print(

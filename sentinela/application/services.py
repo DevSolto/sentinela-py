@@ -2,17 +2,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Callable, Iterable, List
-import sys
+from typing import Iterable, List, Protocol
 import logging
 import time
 
 from sentinela.domain.entities import Article, Portal
-from sentinela.domain.repositories import (
-    ArticleReadRepository,
-    ArticleRepository,
-    PortalRepository,
-)
+from sentinela.domain.ports import ArticleSink, PortalGateway
+from sentinela.domain.repositories import ArticleReadRepository, PortalRepository
 from sentinela.infrastructure.scraper import Scraper
 
 
@@ -37,72 +33,81 @@ class PortalRegistrationService:
         return portal
 
 
+class StatusPublisher(Protocol):
+    """Interface used to emit progress updates during collection."""
+
+    def publish(self, message: str) -> None:
+        """Emit a textual progress ``message``."""
+
+
 class NewsCollectorService:
     """Coordinates scraping and persistence of articles."""
 
     def __init__(
         self,
-        portal_repository: PortalRepository,
-        article_repository: ArticleRepository,
+        portal_gateway: PortalGateway,
+        article_sink: ArticleSink,
         scraper: Scraper,
+        article_reader: ArticleReadRepository | None = None,
+        status_publisher: StatusPublisher | None = None,
     ) -> None:
-        self._portal_repository = portal_repository
-        self._article_repository = article_repository
+        self._portal_gateway = portal_gateway
+        self._article_sink = article_sink
         self._scraper = scraper
+        self._article_reader = article_reader
+        self._status_publisher = status_publisher
+
+    def _emit_status(self, message: str, publisher: StatusPublisher | None) -> None:
+        if publisher:
+            publisher.publish(message)
 
     def collect(
         self,
         portal_name: str,
         start_date: date,
         end_date: date,
-        status_callback: Callable[[str], None] | None = None,
+        status_publisher: StatusPublisher | None = None,
     ) -> List[Article]:
         if start_date > end_date:
             raise ValueError("start_date must be earlier than end_date")
 
-        portal = self._portal_repository.get_by_name(portal_name)
+        portal = self._portal_gateway.get_portal(portal_name)
         if not portal:
             raise ValueError(f"Portal '{portal_name}' not found")
 
-        if status_callback:
-            status_callback(
-                f"Iniciando coleta para '{portal_name}' entre {start_date} e {end_date}"
-            )
+        publisher = status_publisher or self._status_publisher
+        self._emit_status(
+            f"Iniciando coleta para '{portal_name}' entre {start_date} e {end_date}",
+            publisher,
+        )
 
         collected: List[Article] = []
         current = start_date
         while current <= end_date:
-            if status_callback:
-                status_callback(
-                    f"Buscando artigos de {current.isoformat()}"
-                )
+            self._emit_status(f"Buscando artigos de {current.isoformat()}", publisher)
             day_articles = self._scraper.collect_for_date(portal, current)
-            new_articles = [
-                article
-                for article in day_articles
-                if not self._article_repository.exists(article.portal_name, article.url)
-            ]
-            if new_articles:
-                self._article_repository.save_many(new_articles)
-                collected.extend(new_articles)
-            if status_callback:
-                status_callback(
-                    f"{current.isoformat()}: encontrados {len(day_articles)} artigos, "
-                    f"novos salvos {len(new_articles)}"
-                )
-            current += timedelta(days=1)
-        if status_callback:
-            status_callback(
-                f"Coleta finalizada para '{portal_name}'. Total de novos artigos: {len(collected)}"
+            new_articles = self._article_sink.persist(day_articles)
+            collected.extend(new_articles)
+            self._emit_status(
+                f"{current.isoformat()}: encontrados {len(day_articles)} artigos, "
+                f"novos salvos {len(new_articles)}",
+                publisher,
             )
+            current += timedelta(days=1)
+        self._emit_status(
+            f"Coleta finalizada para '{portal_name}'. Total de novos artigos: {len(collected)}",
+            publisher,
+        )
         return collected
 
     def list_articles(
         self, portal_name: str, start_date: date, end_date: date
     ) -> Iterable[Article]:
+        if not self._article_reader:
+            raise RuntimeError("Article reader is not configured for this service")
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
-        return self._article_repository.list_by_period(portal_name, start_dt, end_dt)
+        return self._article_reader.list_by_period(portal_name, start_dt, end_dt)
 
 
     def collect_all_for_portal(
@@ -113,7 +118,7 @@ class NewsCollectorService:
         min_published_date: date | None = None,
     ) -> List[Article]:
         log = logging.getLogger("sentinela.service")
-        portal = self._portal_repository.get_by_name(portal_name)
+        portal = self._portal_gateway.get_portal(portal_name)
         if not portal:
             raise ValueError(f"Portal '{portal_name}' not found")
         total_new = 0
@@ -154,7 +159,6 @@ class NewsCollectorService:
             page_seen_raw = len(collected)
             total_seen += page_seen_raw
             # Filtra duplicados existentes no banco e duplicados dentro do mesmo run
-            new_articles: List[Article] = []
             page_skipped_in_run = 0
             page_skipped_existing_db = 0
             page_skipped_by_date = 0
@@ -170,15 +174,15 @@ class NewsCollectorService:
                     filtered.append(article)
                 collected = filtered
 
+            candidates: List[Article] = []
             for a in collected:
                 if a.url in saved_urls:
                     page_skipped_in_run += 1
                     continue
-                if not self._article_repository.exists(a.portal_name, a.url):
-                    new_articles.append(a)
-                    saved_urls.add(a.url)
-                else:
-                    page_skipped_existing_db += 1
+                candidates.append(a)
+                saved_urls.add(a.url)
+            new_articles = self._article_sink.persist(candidates)
+            page_skipped_existing_db = len(candidates) - len(new_articles)
             page_seen_considered = len(collected)
             total_skipped_in_run += page_skipped_in_run
             total_skipped_existing_db += page_skipped_existing_db
@@ -186,7 +190,6 @@ class NewsCollectorService:
 
             # Salva incrementalmente
             if new_articles:
-                self._article_repository.save_many(new_articles)
                 total_new += len(new_articles)
                 all_new.extend(new_articles)
 

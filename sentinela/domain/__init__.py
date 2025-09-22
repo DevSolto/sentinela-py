@@ -6,19 +6,18 @@ consumers can import from ``sentinela.domain`` directly, e.g.::
     from sentinela.domain import Portal, Article, PortalRepository
 """
 
-from .entities import (
-    Article,
-    Portal,
-    PortalSelectors,
-    Selector,
-)
-from .repositories import ArticleRepository, PortalRepository
+from .entities import Article, Portal, PortalSelectors, Selector
+from .ports import ArticleSink, PortalGateway
+from .repositories import ArticleReadRepository, ArticleRepository, PortalRepository
 
 __all__ = [
     "Selector",
     "PortalSelectors",
     "Portal",
     "Article",
+    "PortalGateway",
     "PortalRepository",
+    "ArticleSink",
     "ArticleRepository",
+    "ArticleReadRepository",
 ]

@@ -141,6 +141,14 @@ def include_routes(
             for portal in container.portal_service.list_portals()
         ]
 
+    @router.get("/portals/{name}", response_model=PortalResponse)
+    def get_portal(name: str) -> PortalResponse:
+        try:
+            portal = container.portal_service.get_portal(name)
+        except ValueError as exc:
+            raise handle_value_error(exc)
+        return map_portal_response(portal)
+
     app.include_router(router)
 
 

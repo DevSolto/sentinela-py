@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from sentinela.application.services import StatusPublisher
 from sentinela.domain.entities import Article
 from sentinela.services.news import NewsContainer, build_news_container
 
@@ -105,8 +106,9 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
         def finish() -> None:
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
-        def status_callback(message: str) -> None:
-            push("log", message)
+        class QueueStatusPublisher(StatusPublisher):
+            def publish(self, message: str) -> None:  # noqa: D401 - simple adapter
+                push("log", message)
 
         async def run_collection() -> None:
             try:
@@ -117,7 +119,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
                         payload.portal,
                         payload.start_date,
                         end_date,
-                        status_callback=status_callback,
+                        status_publisher=QueueStatusPublisher(),
                     ),
                 )
                 response = CollectResponse(
