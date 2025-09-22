@@ -40,3 +40,13 @@ class ArticleRepository(ABC):
         self, portal_name: str, start: datetime, end: datetime
     ) -> Iterable[Article]:
         """List the articles that match the given period."""
+
+
+class ArticleReadRepository(ABC):
+    """Read-only access to persisted articles."""
+
+    @abstractmethod
+    def list_by_period(
+        self, portal_name: str, start: datetime, end: datetime
+    ) -> Iterable[Article]:
+        """List the articles that match the given period."""

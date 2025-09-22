@@ -26,4 +26,7 @@ dev = [
 
 [project.scripts]
 sentinela-api = "sentinela.api:run"
+sentinela-portal-api = "sentinela.services.portals.api:run"
+sentinela-news-api = "sentinela.services.news.api:run"
+sentinela-publications-api = "sentinela.services.publications.api:run"
 sentinela-cli = "sentinela.cli:main"

@@ -7,7 +7,11 @@ from typing import Iterable, Optional
 from pymongo.collection import Collection
 
 from sentinela.domain.entities import Article, Portal, PortalSelectors, Selector
-from sentinela.domain.repositories import ArticleRepository, PortalRepository
+from sentinela.domain.repositories import (
+    ArticleReadRepository,
+    ArticleRepository,
+    PortalRepository,
+)
 
 
 class MongoPortalRepository(PortalRepository):
@@ -136,3 +140,30 @@ class MongoArticleRepository(ArticleRepository):
             published_at=data["published_at"],
             raw=data.get("raw", {}),
         )
+
+
+class MongoArticleReadRepository(ArticleReadRepository):
+    """Read-only repository for articles stored in MongoDB."""
+
+    def __init__(self, collection: Collection) -> None:
+        self._collection = collection
+
+    def list_by_period(
+        self, portal_name: str, start: datetime, end: datetime
+    ) -> Iterable[Article]:
+        cursor = self._collection.find(
+            {
+                "portal_name": portal_name,
+                "published_at": {"$gte": start, "$lte": end},
+            }
+        ).sort("published_at", 1)
+        for data in cursor:
+            yield Article(
+                portal_name=data["portal_name"],
+                title=data["title"],
+                url=data["url"],
+                content=data["content"],
+                summary=data.get("summary"),
+                published_at=data["published_at"],
+                raw=data.get("raw", {}),
+            )
