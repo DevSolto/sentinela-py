@@ -1,5 +1,5 @@
 """Sentinela - coletor modular de notícias."""
-from .application.services import NewsCollectorService, PortalRegistrationService
+from .application import NewsCollectorService, PortalRegistrationService
 from .container import build_container
 from .services.news import build_news_container
 from .services.portals import build_portals_container

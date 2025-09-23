@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
-from sentinela.application.services import NewsCollectorService
+from sentinela.application.servico_coleta_noticias import NewsCollectorService
 from sentinela.infrastructure.scraper import RequestsSoupScraper
 from sentinela.services.news.clients import (
     PortalServiceClient,

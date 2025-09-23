@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sentinela.application.services import NewsCollectorService, PortalRegistrationService
+from sentinela.application.servico_coleta_noticias import NewsCollectorService
+from sentinela.application.servico_registro_portal import (
+    PortalRegistrationService,
+)
 from sentinela.services.news import build_news_container
 from sentinela.services.portals import build_portals_container
 
