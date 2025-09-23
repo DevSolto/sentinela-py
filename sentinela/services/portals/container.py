@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sentinela.application.services import PortalRegistrationService
+from sentinela.application.servico_registro_portal import PortalRegistrationService
 from sentinela.infrastructure.database import MongoClientFactory
 from sentinela.infrastructure.repositories import MongoPortalRepository
 

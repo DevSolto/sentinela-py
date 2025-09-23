@@ -1,6 +1,7 @@
-"""Application services public API for Sentinela."""
+"""Interface pública dos serviços de aplicação do Sentinela."""
 
-from .services import NewsCollectorService, PortalRegistrationService
+from .servico_coleta_noticias import NewsCollectorService
+from .servico_registro_portal import PortalRegistrationService
 
 __all__ = [
     "PortalRegistrationService",

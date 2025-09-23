@@ -42,13 +42,14 @@ O arquivo inclui utilitários para parse de datas (`_parse_date`) e conversão d
 ### `sentinela/container.py`
 Mantém um shim para compatibilidade retroativa, delegando a criação das dependências para `build_portals_container` e `build_news_container`. Retorna um objeto `Container` agregando os serviços principais para código legado.【F:sentinela/container.py†L1-L26】
 
+### `sentinela/application/servico_registro_portal.py`
+Define o caso de uso `PortalRegistrationService`, responsável por impedir duplicidade de nomes e delegar a persistência para o `PortalRepository`. Também oferece consultas utilitárias (`list_portals`, `get_portal`) sobre o cadastro.【F:sentinela/application/servico_registro_portal.py†L1-L56】
+
+### `sentinela/application/servico_coleta_noticias.py`
+Implementa `NewsCollectorService`, coordenando raspagem, publicação e deduplicação de artigos. O serviço publica mensagens de status, permite consultar artigos persistidos por período e realiza varreduras paginadas com múltiplos controles (páginas, datas, duplicados).【F:sentinela/application/servico_coleta_noticias.py†L1-L196】【F:sentinela/application/servico_coleta_noticias.py†L198-L294】
+
 ### `sentinela/application/services.py`
-Contém a camada de aplicação (casos de uso):
-
-- `PortalRegistrationService`: valida duplicidade e delega persistência de portais ao `PortalRepository`.
-- `NewsCollectorService`: coordena repositórios e o scraper para coletar artigos em um período, evitando duplicados e armazenando novos registros. Também fornece método para listar artigos no intervalo solicitado convertendo datas para `datetime`.
-
-Ambos os serviços dependem apenas das interfaces de repositório e do componente de scraping, mantendo regras de negócio isoladas.【F:sentinela/application/services.py†L1-L63】【F:sentinela/application/services.py†L65-L96】
+Mantém um módulo agregador para compatibilidade, reexportando os serviços principais e oferecendo `ArticleQueryService` para leitura de artigos persistidos.【F:sentinela/application/services.py†L1-L24】
 
 ### `sentinela/domain/entities/`
 As entidades do domínio foram divididas em arquivos individuais para facilitar evolução e documentação:
