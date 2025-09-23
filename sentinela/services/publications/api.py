@@ -11,11 +11,11 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from sentinela.domain import Article
 from sentinela.services.publications import (
     PublicationsContainer,
     build_publications_container,
 )
+from sentinela.services.publications.domain import Article
 from sentinela.services.publications.adapters import create_ingestion_router
 
 

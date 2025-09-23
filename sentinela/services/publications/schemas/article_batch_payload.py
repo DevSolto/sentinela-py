@@ -5,7 +5,7 @@ from typing import Iterable
 
 from pydantic import BaseModel, Field
 
-from sentinela.domain import Article
+from sentinela.services.publications.domain import Article
 
 from .article_payload import ArticlePayload
 

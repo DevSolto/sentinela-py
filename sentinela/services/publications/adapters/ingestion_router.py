@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from sentinela.domain import Article
-from sentinela.domain.repositories import ArticleRepository
+from sentinela.services.publications.domain import Article
+from sentinela.services.publications.domain.repositories import ArticleRepository
 
 from ..schemas import ArticleBatchPayload
 
