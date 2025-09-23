@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from sentinela.domain import Article
+from sentinela.services.publications.domain import Article
 
 
 class ArticlePayload(BaseModel):
