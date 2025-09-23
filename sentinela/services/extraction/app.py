@@ -16,7 +16,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from sentinela.domain.entities import Article
+from sentinela.domain import Article
 from sentinela.extraction import CityGazetteer, CityRecord, EntityExtractionService, NewsDocument
 from sentinela.extraction.ner import NEREngine
 from sentinela.extraction.models import ExtractionResultWriter, NewsRepository

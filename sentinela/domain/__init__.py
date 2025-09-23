@@ -1,19 +1,12 @@
-"""Domain public API for Sentinela.
+"""API pública do domínio da aplicação Sentinela.
 
-This package exposes the main domain entities and repository interfaces so
-consumers can import from ``sentinela.domain`` directly, e.g.::
-
-    from sentinela.domain import Portal, Article, PortalRepository
+O módulo centraliza as entidades, portas e repositórios mais utilizados
+para que possam ser importados diretamente de ``sentinela.domain``.
 """
 
-from .entities import (
-    Article,
-    Portal,
-    PortalSelectors,
-    Selector,
-)
+from .entities import Article, Portal, PortalSelectors, Selector
 from .ports import ArticleSink, PortalGateway
-from .repositories import ArticleRepository, PortalRepository
+from .repositories import ArticleReadRepository, ArticleRepository, PortalRepository
 
 __all__ = [
     "Selector",
@@ -22,6 +15,7 @@ __all__ = [
     "Article",
     "PortalRepository",
     "ArticleRepository",
+    "ArticleReadRepository",
     "PortalGateway",
     "ArticleSink",
 ]

@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from sentinela.domain.entities import Article, Portal, Selector
+from sentinela.domain import Article, Portal, Selector
 
 
 class Scraper(ABC):

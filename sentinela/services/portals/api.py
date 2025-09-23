@@ -10,7 +10,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from sentinela.domain.entities import Portal, PortalSelectors, Selector
+from sentinela.domain import Portal, PortalSelectors, Selector
 from sentinela.services.portals import PortalsContainer, build_portals_container
 
 

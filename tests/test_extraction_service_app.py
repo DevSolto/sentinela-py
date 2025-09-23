@@ -5,7 +5,7 @@ from urllib.parse import quote
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from sentinela.domain.entities import Article
+from sentinela.domain import Article
 from sentinela.extraction import CityGazetteer, CityRecord, NewsDocument
 from sentinela.extraction.models import EntitySpan
 from sentinela.services.extraction import (

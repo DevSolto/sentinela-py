@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 
 import httpx
 
-from sentinela.domain.entities import Article, Portal, PortalSelectors, Selector
+from sentinela.domain import Article, Portal, PortalSelectors, Selector
 from sentinela.domain.ports import ArticleSink, PortalGateway
 
 
