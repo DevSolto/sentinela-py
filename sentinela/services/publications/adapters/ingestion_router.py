@@ -6,18 +6,11 @@ from fastapi import APIRouter
 from sentinela.domain import Article
 from sentinela.domain.repositories import ArticleRepository
 
-from .article_batch_payload import ArticleBatchPayload
+from ..schemas import ArticleBatchPayload
 
 
 def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
-    """Cria rotas de ingestão em lote usando o repositório informado.
-
-    Parameters
-    ----------
-    repository:
-        Implementação de :class:`ArticleRepository` utilizada para armazenar os
-        artigos recebidos.
-    """
+    """Cria rotas de ingestão em lote usando o repositório informado."""
 
     router = APIRouter(prefix="/articles", tags=["Ingestão"])
 

@@ -1,4 +1,4 @@
-"""REST API entrypoint aggregating Sentinela services."""
+"""Ponto de entrada REST que agrega os serviços do Sentinela."""
 from __future__ import annotations
 
 import os
@@ -19,7 +19,7 @@ from sentinela.services.publications.api import include_routes as include_public
 
 
 def create_app() -> FastAPI:
-    """Create the FastAPI application with all service routes configured."""
+    """Cria a aplicação FastAPI com todas as rotas de serviços configuradas."""
 
     portals_container = build_portals_container()
     news_container = build_news_container()
@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
 
 
 def run() -> None:
-    """Run the aggregated API using Uvicorn."""
+    """Executa a API agregada utilizando o Uvicorn."""
 
     load_dotenv()
     uvicorn.run(

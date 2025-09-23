@@ -1,4 +1,4 @@
-"""FastAPI application exposing publication read endpoints."""
+"""Aplicação FastAPI responsável por leitura e ingestão de publicações."""
 from __future__ import annotations
 
 import os
@@ -20,66 +20,100 @@ from sentinela.services.publications.adapters import create_ingestion_router
 
 
 class EnrichedCandidateResponse(BaseModel):
-    """Representation of a candidate city resolution."""
+    """Representa um candidato de cidade retornado pelo pipeline de extração."""
 
+    #: Identificador único da cidade candidato no cadastro oficial.
     city_id: str
+    #: Nome canônico da cidade correspondente ao candidato.
     name: str
+    #: Unidade federativa associada ao registro.
     uf: str
+    #: Pontuação que indica a confiança na correspondência encontrada.
     score: float
 
 
 class EnrichedCityResponse(BaseModel):
-    """City occurrence enriched by the extraction pipeline."""
+    """Agregação das ocorrências de cidades enriquecidas pela extração."""
 
+    #: Código IBGE ou identificador interno da cidade reconhecida.
     city_id: str | None
+    #: Trecho exato do texto associado à ocorrência.
     surface: str
+    #: Posição inicial do trecho no corpo do artigo.
     start: int
+    #: Posição final do trecho no corpo do artigo.
     end: int
+    #: Frase completa utilizada para exibir o contexto.
     sentence: str
+    #: Situação da classificação atribuída à ocorrência.
     status: str
+    #: UF citada diretamente no texto, quando disponível.
     uf_surface: str | None
+    #: Método responsável por identificar a ocorrência.
     method: str
+    #: Nível de confiança calculado para a detecção da cidade.
     confidence: float
+    #: Lista de candidatos avaliados para determinar a melhor cidade.
     candidates: list[EnrichedCandidateResponse]
 
 
 class EnrichedPersonResponse(BaseModel):
-    """Person occurrence enriched by the extraction pipeline."""
+    """Estrutura que descreve pessoas encontradas na etapa de extração."""
 
+    #: Identificador canônico da pessoa encontrada.
     person_id: str
+    #: Nome padronizado utilizado para exibir a pessoa.
     canonical_name: str
+    #: Trecho exato do texto associado à ocorrência.
     surface: str
+    #: Posição inicial do trecho no corpo do artigo.
     start: int
+    #: Posição final do trecho no corpo do artigo.
     end: int
+    #: Frase completa utilizada para exibir o contexto.
     sentence: str
+    #: Método responsável por identificar a pessoa.
     method: str
+    #: Nível de confiança calculado para a detecção da pessoa.
     confidence: float
 
 
 class EnrichedArticleResponse(BaseModel):
-    """Collection of entities associated with a news article."""
+    """Coleção de entidades enriquecidas vinculadas a um artigo."""
 
+    #: URL do artigo processado pela pipeline de extração.
     url: str
+    #: Versão do modelo de NER utilizado na análise.
     ner_version: str
+    #: Versão do gazetteer aplicada durante o enriquecimento.
     gazetteer_version: str
+    #: Data e hora em que o enriquecimento foi atualizado.
     updated_at: str
+    #: Relação de pessoas encontradas no artigo analisado.
     people: list[EnrichedPersonResponse]
+    #: Relação de cidades encontradas no artigo analisado.
     cities: list[EnrichedCityResponse]
 
 
 class ArticleResponse(BaseModel):
-    """Representation of an article returned by the API."""
+    """Representação pública de um artigo armazenado."""
 
+    #: Nome do portal responsável pela publicação do artigo.
     portal: str
+    #: Título exibido quando o artigo foi coletado.
     title: str
+    #: Endereço do conteúdo completo disponível para o leitor.
     url: str
+    #: Conteúdo do artigo em texto para consulta.
     content: str
+    #: Data de publicação do artigo em formato ISO.
     published_at: str
+    #: Resumo opcional para facilitar a leitura rápida.
     summary: str | None = None
 
 
 def configure_cors(app: FastAPI) -> None:
-    """Apply the default CORS configuration used by the services."""
+    """Configura o CORS padrão utilizado pelos serviços do Sentinela."""
 
     app.add_middleware(
         CORSMiddleware,
@@ -93,7 +127,7 @@ def configure_cors(app: FastAPI) -> None:
 def include_routes(
     app: FastAPI, container: PublicationsContainer, *, prefix: str = ""
 ) -> None:
-    """Register publication routes on a FastAPI application."""
+    """Registra rotas de consulta e ingestão de publicações na aplicação."""
 
     router = APIRouter(prefix=prefix, tags=["Publicações"])
 
@@ -143,10 +177,14 @@ def include_routes(
 
     @router.get("/enriched/articles", response_model=list[EnrichedArticleResponse])
     def list_enriched_articles() -> list[EnrichedArticleResponse]:
+        """Lista os resultados enriquecidos disponíveis no armazenamento."""
+
         return [map_enriched(result) for result in container.extraction_store.list()]
 
     @router.get("/enriched/articles/{url:path}", response_model=EnrichedArticleResponse)
     def get_enriched_article(url: str) -> EnrichedArticleResponse:
+        """Obtém o enriquecimento associado à URL informada."""
+
         result = container.extraction_store.get(url)
         if not result:
             raise HTTPException(status_code=404, detail="Resultado não encontrado")
@@ -164,6 +202,8 @@ def include_routes(
 
     @router.get("/articles", response_model=list[ArticleResponse])
     def list_articles(portal: str, start_date: date, end_date: date) -> Iterable[ArticleResponse]:
+        """Lista artigos por portal dentro do intervalo de datas informado."""
+
         if start_date > end_date:
             raise HTTPException(
                 status_code=400,
@@ -178,7 +218,7 @@ def include_routes(
 
 
 def create_app() -> FastAPI:
-    """Create the FastAPI application with publication routes configured."""
+    """Instancia a aplicação com as rotas de publicações configuradas."""
 
     container = build_publications_container()
     app = FastAPI(
@@ -192,7 +232,7 @@ def create_app() -> FastAPI:
 
 
 def run() -> None:
-    """Run the publications API using Uvicorn."""
+    """Executa a API de publicações usando o Uvicorn."""
 
     load_dotenv()
     uvicorn.run(
