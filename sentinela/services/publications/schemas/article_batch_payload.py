@@ -1,4 +1,4 @@
-"""Coleções de artigos enviadas em uma única requisição."""
+"""Coleções de artigos enviados em lote para armazenamento."""
 from __future__ import annotations
 
 from typing import Iterable
@@ -11,12 +11,13 @@ from .article_payload import ArticlePayload
 
 
 class ArticleBatchPayload(BaseModel):
-    """Agrupa diversos artigos recebidos em lote pela API."""
+    """Agrupamento de artigos recebidos em uma única requisição."""
 
+    #: Conjunto validado de artigos a serem transformados em domínio.
     articles: list[ArticlePayload] = Field(default_factory=list)
 
     def to_domain(self) -> Iterable[Article]:
-        """Gera instâncias de ``Article`` para cada item do lote."""
+        """Gera entidades ``Article`` correspondentes a cada payload informado."""
 
         for payload in self.articles:
             yield payload.to_domain()

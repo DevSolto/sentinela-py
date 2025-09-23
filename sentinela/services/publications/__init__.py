@@ -1,4 +1,4 @@
-"""Publications service dependency container."""
+"""Contêiner de dependências do serviço de publicações."""
 
 from .container import PublicationsContainer, build_publications_container
 

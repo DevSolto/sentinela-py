@@ -1,4 +1,4 @@
-"""FastAPI application exposing article collection endpoints."""
+"""Aplicação FastAPI com as rotas de coleta de notícias."""
 from __future__ import annotations
 
 import asyncio
@@ -14,48 +14,68 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from sentinela.domain import Article
-from sentinela.services.news import NewsContainer, build_news_container
 from sentinela.services.extraction import notify_news_ready
+from sentinela.services.news import NewsContainer, build_news_container
 
 
 class CollectRequest(BaseModel):
-    """Parameters to trigger article collection."""
+    """Parâmetros necessários para iniciar a coleta de notícias."""
 
+    #: Nome do portal previamente cadastrado para coleta.
     portal: str
+    #: Data inicial utilizada como filtro de pesquisa.
     start_date: date
+    #: Data final opcional; quando omitida utiliza ``start_date``.
     end_date: date | None = None
 
 
 class ArticleResponse(BaseModel):
-    """Representation of an article returned by the API."""
+    """Representação de um artigo retornado nas rotas de coleta."""
 
+    #: Nome do portal de origem associado ao artigo coletado.
     portal: str
+    #: Título obtido na página de detalhe do artigo.
     title: str
+    #: Endereço público usado para acessar o artigo.
     url: str
+    #: Conteúdo integral do artigo em texto plano.
     content: str
+    #: Data e hora de publicação no formato ISO 8601.
     published_at: str
+    #: Resumo opcional presente na listagem de notícias.
     summary: str | None = None
 
 
 class CollectResponse(BaseModel):
-    """Response returned after collecting articles."""
+    """Resumo da operação de coleta retornado ao cliente."""
 
+    #: Portal utilizado como origem para a coleta.
     portal: str
+    #: Quantidade de artigos novos encontrados.
     collected: int
+    #: Lista dos artigos coletados durante a operação.
     articles: list[ArticleResponse]
 
 
 class ExtractionReadyRequest(BaseModel):
-    """Payload used to notify the extraction service about a new article."""
+    """Payload utilizado para notificar o serviço de extração sobre um artigo."""
 
+    #: Nome do portal responsável pelo artigo enviado para extração.
     portal: str
+    #: Título do artigo a ser processado pela extração.
     title: str
+    #: URL de onde o artigo pode ser obtido integralmente.
     url: str
+    #: Conteúdo do artigo já normalizado.
     content: str
+    #: Instante de publicação informado na requisição.
     published_at: str
+    #: Resumo opcional enviado junto ao artigo.
     summary: str | None = None
 
     def to_article(self) -> Article:
+        """Converte o payload recebido em uma entidade ``Article``."""
+
         return Article(
             portal_name=self.portal,
             title=self.title,
@@ -65,8 +85,9 @@ class ExtractionReadyRequest(BaseModel):
             summary=self.summary,
         )
 
+
 def configure_cors(app: FastAPI) -> None:
-    """Apply the default CORS configuration used by the services."""
+    """Aplica a configuração padrão de CORS utilizada pelos serviços."""
 
     app.add_middleware(
         CORSMiddleware,
@@ -78,7 +99,7 @@ def configure_cors(app: FastAPI) -> None:
 
 
 def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") -> None:
-    """Register news collection routes on a FastAPI application."""
+    """Registra as rotas de coleta de notícias na aplicação informada."""
 
     router = APIRouter(prefix=prefix, tags=["Coleta de Notícias"])
 
@@ -99,6 +120,8 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
 
     @router.post("/collect", response_model=CollectResponse)
     def collect_articles(request: CollectRequest) -> CollectResponse:
+        """Executa a coleta síncrona de notícias para o portal informado."""
+
         try:
             end_date = request.end_date or request.start_date
             articles = container.collector_service.collect(
@@ -116,8 +139,10 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
             notify_news_ready(articles)
         return response
 
-    @router.post('/extraction/ready')
+    @router.post("/extraction/ready")
     def publish_for_extraction(request: ExtractionReadyRequest) -> dict[str, int]:
+        """Encaminha um artigo diretamente para a fila de extração."""
+
         article = request.to_article()
         notify_news_ready([article])
         return {"queued": 1}
@@ -126,6 +151,8 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
     async def collect_articles_stream(
         request: Request, payload: CollectRequest
     ) -> EventSourceResponse:
+        """Inicia a coleta e transmite eventos em tempo real via SSE."""
+
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
 
@@ -188,7 +215,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
 
 
 def create_app() -> FastAPI:
-    """Create the FastAPI application with news collection routes."""
+    """Instancia a aplicação com as rotas de coleta configuradas."""
 
     container = build_news_container()
     app = FastAPI(
@@ -202,7 +229,7 @@ def create_app() -> FastAPI:
 
 
 def run() -> None:
-    """Run the news API using Uvicorn."""
+    """Executa a API de notícias utilizando o Uvicorn."""
 
     load_dotenv()
     uvicorn.run(

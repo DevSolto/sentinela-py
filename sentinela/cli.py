@@ -1,4 +1,4 @@
-"""Command line interface for the Sentinela project."""
+"""Interface de linha de comando para operar o projeto Sentinela."""
 from __future__ import annotations
 
 import argparse
