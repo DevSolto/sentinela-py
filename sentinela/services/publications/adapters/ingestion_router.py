@@ -1,53 +1,29 @@
-"""Adapters for ingesting new articles into the publications service."""
+"""Fábricas de rotas responsáveis por ingestão de artigos."""
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Iterable
-
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
 
 from sentinela.domain import Article
 from sentinela.domain.repositories import ArticleRepository
 
-
-class ArticlePayload(BaseModel):
-    """Payload representing an article received from another service."""
-
-    portal: str
-    title: str
-    url: str
-    content: str
-    published_at: datetime
-    summary: str | None = None
-
-    def to_domain(self) -> Article:
-        return Article(
-            portal_name=self.portal,
-            title=self.title,
-            url=self.url,
-            content=self.content,
-            summary=self.summary,
-            published_at=self.published_at,
-        )
-
-
-class ArticleBatchPayload(BaseModel):
-    """Collection of articles ingested in a single request."""
-
-    articles: list[ArticlePayload] = Field(default_factory=list)
-
-    def to_domain(self) -> Iterable[Article]:
-        for payload in self.articles:
-            yield payload.to_domain()
+from .article_batch_payload import ArticleBatchPayload
 
 
 def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
-    """Create a router exposing endpoints for ingesting new articles."""
+    """Cria rotas de ingestão em lote usando o repositório informado.
+
+    Parameters
+    ----------
+    repository:
+        Implementação de :class:`ArticleRepository` utilizada para armazenar os
+        artigos recebidos.
+    """
 
     router = APIRouter(prefix="/articles", tags=["Ingestão"])
 
     def serialize(article: Article) -> dict:
+        """Converte ``Article`` em resposta JSON documentando campos expostos."""
+
         return {
             "portal": article.portal_name,
             "title": article.title,
@@ -59,6 +35,8 @@ def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
 
     @router.post("/batch")
     def ingest_articles(payload: ArticleBatchPayload) -> dict:
+        """Recebe um lote de artigos, ignora duplicados e retorna os armazenados."""
+
         articles = list(payload.to_domain())
         new_articles: list[Article] = []
         for article in articles:
@@ -71,4 +49,4 @@ def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
     return router
 
 
-__all__ = ["create_ingestion_router", "ArticlePayload", "ArticleBatchPayload"]
+__all__ = ["create_ingestion_router"]
