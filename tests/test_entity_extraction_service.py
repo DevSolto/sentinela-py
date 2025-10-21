@@ -58,6 +58,16 @@ class FakeResultWriter(ExtractionResultWriter):
         self.cities.append(occurrence)
 
 
+class FakeArticleCitiesWriter:
+    def __init__(self) -> None:
+        self.updates: list[tuple[str, tuple[str, ...], str | None]] = []
+
+    def update_article_cities(
+        self, url: str, cities: tuple[str, ...], *, portal: str | None = None
+    ) -> None:
+        self.updates.append((url, cities, portal))
+
+
 def test_entity_extraction_service_processes_people_and_cities():
     document = NewsDocument(
         url="http://example.com",
@@ -83,6 +93,7 @@ def test_entity_extraction_service_processes_people_and_cities():
     )
     repository = FakeNewsRepository([document])
     result_writer = FakeResultWriter()
+    article_cities_writer = FakeArticleCitiesWriter()
     service = EntityExtractionService(
         news_repository=repository,
         result_writer=result_writer,
@@ -91,6 +102,7 @@ def test_entity_extraction_service_processes_people_and_cities():
         ner_version="1",
         gazetteer_version="1",
         batch_size=10,
+        article_cities_writer=article_cities_writer,
     )
 
     result = service.process_next_batch()
@@ -107,3 +119,11 @@ def test_entity_extraction_service_processes_people_and_cities():
     city_occurrence = result_writer.cities[0]
     assert city_occurrence.status in {"resolved", "ambiguous"}
     assert city_occurrence.uf_surface in {"PE", None}
+    assert len(article_cities_writer.updates) == 1
+    updated_url, updated_cities, updated_portal = article_cities_writer.updates[0]
+    assert updated_url == document.url
+    assert updated_portal == document.source
+    assert any(
+        identifier == "1" or identifier.startswith("Recife")
+        for identifier in updated_cities
+    )
