@@ -23,6 +23,8 @@ class ArticlePayload(BaseModel):
     published_at: datetime
     #: Resumo opcional do conteúdo para visualização rápida.
     summary: str | None = None
+    #: Classificação atribuída ao artigo pela integração ou enriquecimento.
+    classification: str | None = None
     #: Lista de cidades associadas ao artigo fornecidas pela integração.
     cities: list[str] = Field(default_factory=list)
 
@@ -35,6 +37,7 @@ class ArticlePayload(BaseModel):
             url=self.url,
             content=self.content,
             summary=self.summary,
+            classification=self.classification,
             published_at=self.published_at,
             cities=tuple(self.cities),
         )

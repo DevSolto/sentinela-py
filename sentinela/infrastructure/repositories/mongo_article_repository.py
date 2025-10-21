@@ -60,16 +60,22 @@ class MongoArticleRepository(ArticleRepository):
         )
 
     def list_by_period(
-        self, portal_name: str, start: datetime, end: datetime
+        self,
+        portal_name: str,
+        start: datetime,
+        end: datetime,
+        *,
+        city: str | None = None,
     ) -> Iterable[Article]:
         """Recupera artigos de um portal dentro do intervalo informado."""
 
-        cursor = self._collection.find(
-            {
-                "portal_name": portal_name,
-                "published_at": {"$gte": start, "$lte": end},
-            }
-        ).sort("published_at", 1)
+        criteria: dict[str, object] = {
+            "portal_name": portal_name,
+            "published_at": {"$gte": start, "$lte": end},
+        }
+        if city:
+            criteria["cities"] = city
+        cursor = self._collection.find(criteria).sort("published_at", 1)
         for data in cursor:
             yield self._deserialize_article(data)
 
@@ -82,6 +88,7 @@ class MongoArticleRepository(ArticleRepository):
             "url": article.url,
             "content": article.content,
             "summary": article.summary,
+            "classification": article.classification,
             "published_at": article.published_at,
             "cities": list(article.cities),
             "raw": article.raw,
@@ -96,6 +103,7 @@ class MongoArticleRepository(ArticleRepository):
             url=data["url"],
             content=data["content"],
             summary=data.get("summary"),
+            classification=data.get("classification"),
             published_at=data["published_at"],
             cities=tuple(data.get("cities") or ()),
             raw=data.get("raw", {}),

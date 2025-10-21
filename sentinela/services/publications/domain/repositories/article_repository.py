@@ -21,7 +21,12 @@ class ArticleRepository(ABC):
 
     @abstractmethod
     def list_by_period(
-        self, portal_name: str, start: datetime, end: datetime
+        self,
+        portal_name: str,
+        start: datetime,
+        end: datetime,
+        *,
+        city: str | None = None,
     ) -> Iterable[Article]:
         """Recupera artigos de um portal dentro do intervalo especificado."""
 

@@ -110,6 +110,8 @@ class ArticleResponse(BaseModel):
     published_at: str
     #: Resumo opcional para facilitar a leitura rápida.
     summary: str | None = None
+    #: Classificação atribuída ao artigo após enriquecimento.
+    classification: str | None = None
     #: Cidades associadas ao artigo após coleta ou enriquecimento.
     cities: list[str] = Field(default_factory=list)
 
@@ -200,11 +202,17 @@ def include_routes(
             content=article.content,
             published_at=article.published_at.isoformat(),
             summary=article.summary,
+            classification=article.classification,
             cities=list(article.cities),
         )
 
     @router.get("/articles", response_model=list[ArticleResponse])
-    def list_articles(portal: str, start_date: date, end_date: date) -> Iterable[ArticleResponse]:
+    def list_articles(
+        portal: str,
+        start_date: date,
+        end_date: date,
+        city: str | None = None,
+    ) -> Iterable[ArticleResponse]:
         """Lista artigos por portal dentro do intervalo de datas informado."""
 
         if start_date > end_date:
@@ -212,7 +220,9 @@ def include_routes(
                 status_code=400,
                 detail="start_date deve ser anterior ou igual a end_date",
             )
-        articles = container.query_service.list_articles(portal, start_date, end_date)
+        articles = container.query_service.list_articles(
+            portal, start_date, end_date, city=city
+        )
         return [map_article_response(article) for article in articles]
 
     app.include_router(router)
