@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import FastAPI
@@ -17,6 +18,13 @@ from sentinela.services.extraction import (
 from sentinela.services.extraction.adapters import ExtractionResultStore, PendingNewsQueue
 from sentinela.services.publications import PublicationsContainer
 from sentinela.services.publications.api import include_routes
+from sentinela.services.publications.application import ArticleQueryService
+from sentinela.services.publications.domain import Article as PublicationsArticle
+from sentinela.services.publications.infrastructure import (
+    MongoArticleCitiesWriter,
+    MongoArticleReadRepository,
+    MongoArticleRepository,
+)
 
 
 _SAMPLE_TEXT = "Maria Silva esteve em Florianópolis-SC acompanhada da comitiva."
@@ -31,7 +39,90 @@ class FakeNER:
             yield span
 
 
-def _build_container() -> tuple:
+class FakeCursor:
+    def __init__(self, documents: list[dict[str, Any]]):
+        self._documents = documents
+
+    def sort(self, key: str, direction: int):
+        reverse = direction < 0
+        self._documents.sort(key=lambda doc: doc.get(key), reverse=reverse)
+        return self
+
+    def __iter__(self):
+        return iter(self._documents)
+
+
+class FakeCollection:
+    def __init__(self):
+        self._documents: list[dict[str, Any]] = []
+
+    @property
+    def documents(self) -> list[dict[str, Any]]:
+        return self._documents
+
+    def create_index(self, *args, **kwargs) -> None:
+        return None
+
+    def insert_many(self, documents: list[dict[str, Any]], ordered: bool = False):
+        for document in documents:
+            self._documents.append(document.copy())
+
+    def count_documents(self, criteria: dict[str, Any], limit: int = 0) -> int:
+        count = sum(1 for doc in self._documents if _matches(doc, criteria))
+        if limit == 1:
+            return 1 if count else 0
+        return count
+
+    def find(self, criteria: dict[str, Any]):
+        matched = [doc.copy() for doc in self._documents if _matches(doc, criteria)]
+        return FakeCursor(matched)
+
+    def update_many(self, criteria: dict[str, Any], update: dict[str, Any]):
+        modified = 0
+        for document in self._documents:
+            if _matches(document, criteria):
+                for key, value in update.get("$set", {}).items():
+                    document[key] = value
+                modified += 1
+        return SimpleNamespace(modified_count=modified)
+
+
+def _align_datetime(reference: datetime | None, value: datetime | None) -> tuple[datetime | None, datetime | None]:
+    if reference is None or value is None:
+        return reference, value
+    if reference.tzinfo and value.tzinfo is None:
+        value = value.replace(tzinfo=reference.tzinfo)
+    elif value.tzinfo and reference.tzinfo is None:
+        reference = reference.replace(tzinfo=value.tzinfo)
+    return reference, value
+
+
+def _matches(document: dict[str, Any], criteria: dict[str, Any]) -> bool:
+    for key, expected in criteria.items():
+        value = document.get(key)
+        if key == "published_at" and isinstance(expected, dict):
+            lower = expected.get("$gte")
+            upper = expected.get("$lte")
+            if isinstance(lower, datetime) and isinstance(value, datetime):
+                lower, value = _align_datetime(lower, value)
+            if lower and value < lower:
+                return False
+            if isinstance(upper, datetime) and isinstance(value, datetime):
+                upper, value = _align_datetime(upper, value)
+            if upper and value > upper:
+                return False
+            continue
+        if key == "cities":
+            cities = document.get("cities") or []
+            if expected not in cities:
+                return False
+            continue
+        if value != expected:
+            return False
+    return True
+
+
+def _build_container(article_cities_writer=None) -> tuple:
     queue = PendingNewsQueue()
     store = ExtractionResultStore()
     city = CityRecord(id="4205407", name="Florianópolis", uf="SC", alt_names=("Floripa",))
@@ -56,6 +147,7 @@ def _build_container() -> tuple:
         queue=queue,
         result_store=store,
     )
+    config.article_cities_writer = article_cities_writer
     container = build_extraction_container(config)
     return container, queue, store
 
@@ -150,3 +242,98 @@ def test_extraction_api_flow_and_publications_endpoint():
 
     enriched_detail = publications_client.get(f"/enriched/articles/{encoded_url}")
     assert enriched_detail.status_code == 200
+
+
+def test_entity_extraction_updates_article_cities_in_mongo_collection():
+    collection = FakeCollection()
+    repository = MongoArticleRepository(collection)
+    writer = MongoArticleCitiesWriter(collection)
+
+    article = PublicationsArticle(
+        portal_name="Diário",
+        title="Maria Silva visitou Florianópolis",
+        url="https://example.com/news/1",
+        content=_SAMPLE_TEXT,
+        published_at=datetime(2024, 5, 12, tzinfo=timezone.utc),
+        cities=(),
+    )
+    repository.save_many([article])
+
+    container, queue, _ = _build_container(article_cities_writer=writer)
+    document = _sample_document()
+    queue.enqueue(document)
+
+    result = container.service.process_next_batch()
+
+    assert result.processed == 1
+    stored = collection.documents[0]
+    assert stored["url"] == article.url
+    assert "4205407" in stored["cities"]
+
+
+def test_publications_api_filters_articles_by_city_after_extraction():
+    collection = FakeCollection()
+    repository = MongoArticleRepository(collection)
+    writer = MongoArticleCitiesWriter(collection)
+    reader = MongoArticleReadRepository(collection)
+    query_service = ArticleQueryService(reader)
+
+    base_published_at = datetime(2024, 5, 12, tzinfo=timezone.utc)
+    tracked_article = PublicationsArticle(
+        portal_name="Diário",
+        title="Maria Silva visitou Florianópolis",
+        url="https://example.com/news/1",
+        content=_SAMPLE_TEXT,
+        published_at=base_published_at,
+        cities=(),
+    )
+    other_article = PublicationsArticle(
+        portal_name="Diário",
+        title="Outra notícia",
+        url="https://example.com/news/2",
+        content="Conteúdo diverso",
+        published_at=base_published_at.replace(day=13),
+        cities=("3550308",),
+    )
+    repository.save_many([tracked_article, other_article])
+
+    container, queue, store = _build_container(article_cities_writer=writer)
+    queue.enqueue(_sample_document())
+    container.service.process_next_batch()
+
+    publications_app = FastAPI()
+    container_deps = PublicationsContainer(
+        article_repository=repository,
+        query_service=query_service,
+        extraction_store=store,
+        article_cities_writer=writer,
+        article_reader=reader,
+    )
+    include_routes(publications_app, container_deps)
+    client = TestClient(publications_app)
+
+    response_filtered = client.get(
+        "/articles",
+        params={
+            "portal": "Diário",
+            "start_date": "2024-05-10",
+            "end_date": "2024-05-20",
+            "city": "4205407",
+        },
+    )
+    assert response_filtered.status_code == 200
+    filtered_body = response_filtered.json()
+    assert [article["url"] for article in filtered_body] == [tracked_article.url]
+    assert "4205407" in filtered_body[0]["cities"]
+
+    response_all = client.get(
+        "/articles",
+        params={
+            "portal": "Diário",
+            "start_date": "2024-05-10",
+            "end_date": "2024-05-20",
+        },
+    )
+    assert response_all.status_code == 200
+    all_urls = {article["url"] for article in response_all.json()}
+    assert all_urls == {tracked_article.url, other_article.url}
