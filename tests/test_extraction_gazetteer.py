@@ -30,3 +30,20 @@ def test_gazetteer_returns_foreign_when_not_found():
     resolution = gazetteer.resolve("Springfield", uf_surface=None, context_states=None)
     assert resolution.status == "foreign"
     assert resolution.city_id is None
+
+
+def test_gazetteer_penalises_natal_without_state_context():
+    gazetteer = CityGazetteer([CityRecord(id="4", name="Natal", uf="RN")])
+    resolution = gazetteer.resolve("Natal", uf_surface=None, context_states=set())
+
+    assert resolution.status == "unknown_uf"
+    assert resolution.city_id is None
+    assert resolution.confidence < 0.5
+
+
+def test_gazetteer_resolves_natal_with_rn_context():
+    gazetteer = CityGazetteer([CityRecord(id="4", name="Natal", uf="RN")])
+    resolution = gazetteer.resolve("Natal", uf_surface=None, context_states={"RN"})
+
+    assert resolution.status == "resolved"
+    assert resolution.city_id == "4"

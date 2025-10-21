@@ -169,11 +169,7 @@ class EntityExtractionService:
                 status=resolution.status,
                 uf_surface=uf_surface,
                 method=entity.method,
-                confidence=(
-                    min(entity.score, resolution.confidence)
-                    if resolution.city_id is None
-                    else entity.score
-                ),
+                confidence=entity.score * resolution.confidence,
                 candidates=resolution.candidates,
             )
             city_occurrences.append(occurrence)

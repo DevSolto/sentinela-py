@@ -6,7 +6,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, Iterable, List
 
-from .models import CityCandidate, CityResolution
+from .disambiguation import DisambiguationResult, disambiguate_city
+from .models import CityResolution
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,68 +58,27 @@ class CityGazetteer:
 
         normalized_surface = self._normalize(surface)
         candidates = list(self._by_name.get(normalized_surface, []))
-        context_set = set(context_states or [])
 
-        def _make_candidates(entries: Iterable[CityRecord]) -> tuple[CityCandidate, ...]:
-            entries_list = list(entries)
-            if not entries_list:
-                return ()
-            weight = 1.0 / len(entries_list)
-            return tuple(
-                CityCandidate(city_id=c.id, name=c.name, uf=c.uf, score=weight)
-                for c in entries_list
-            )
+        result: DisambiguationResult = disambiguate_city(
+            surface,
+            candidates,
+            uf_surface=uf_surface,
+            context_states=context_states,
+        )
 
-        if uf_surface:
-            uf_filtered = [c for c in candidates if c.uf.upper() == uf_surface.upper()]
-            if uf_filtered:
-                candidates = uf_filtered
-
-        if not candidates:
-            return CityResolution(
-                city_id=None,
-                surface=surface,
-                start=-1,
-                end=-1,
-                sentence="",
-                status="foreign",
-                uf_surface=uf_surface,
-                method="gazetteer",
-                confidence=0.2,
-                candidates=(),
-            )
-
-        if len(candidates) > 1 and context_set:
-            context_filtered = [c for c in candidates if c.uf.upper() in context_set]
-            if context_filtered:
-                candidates = context_filtered
-
-        if len(candidates) == 1:
-            candidate = candidates[0]
-            return CityResolution(
-                city_id=candidate.id,
-                surface=surface,
-                start=-1,
-                end=-1,
-                sentence="",
-                status="resolved",
-                uf_surface=uf_surface,
-                method="gazetteer",
-                confidence=0.95,
-                candidates=_make_candidates([candidate]),
-            )
+        resolved_id = result.city.id if result.city is not None else None
 
         return CityResolution(
-            city_id=None,
+            city_id=resolved_id,
             surface=surface,
             start=-1,
             end=-1,
             sentence="",
-            status="ambiguous",
+            status=result.status,
             uf_surface=uf_surface,
             method="gazetteer",
-            confidence=0.5,
-            candidates=_make_candidates(candidates),
+            confidence=result.confidence,
+            candidates=result.candidates,
         )
 
 

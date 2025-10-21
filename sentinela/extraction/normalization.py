@@ -59,6 +59,15 @@ _STATE_NAMES = {
 }
 
 _STATE_ABBREVIATIONS = set(_STATE_NAMES.values())
+_STATE_ASCII_MAP = {
+    unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode("ASCII"): uf
+    for name, uf in _STATE_NAMES.items()
+}
+
+_ESTADO_DE_PATTERN = re.compile(
+    r"estado\s+d[aeo]s?\s+(?:do|da|dos|das)?\s*(?P<uf>[A-Z]{2})\b",
+    re.IGNORECASE,
+)
 
 _SENTENCE_REGEX = re.compile(r"[^.!?\n]+[.!?]?")
 _CONNECTORS = {"da", "de", "dos", "das", "do", "e"}
@@ -129,18 +138,33 @@ def find_sentence_containing(text: str, start: int, end: int) -> str:
     return text.strip()
 
 
+def _strip_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
 def extract_state_mentions(text: str) -> Set[str]:
     """Identify Brazilian state abbreviations present in the text."""
 
     mentions: Set[str] = set()
     lowered = text.lower()
+    ascii_text = _strip_accents(lowered)
+
     for name, uf in _STATE_NAMES.items():
         if name in lowered:
             mentions.add(uf)
+    for ascii_name, uf in _STATE_ASCII_MAP.items():
+        if ascii_name and ascii_name in ascii_text:
+            mentions.add(uf)
+
     for uf in _STATE_ABBREVIATIONS:
         pattern = rf"\b{uf}\b"
-        if re.search(pattern, text):
+        if re.search(pattern, text, re.IGNORECASE):
             mentions.add(uf)
+
+    for match in _ESTADO_DE_PATTERN.finditer(text):
+        mentions.add(match.group("uf").upper())
+
     return mentions
 
 

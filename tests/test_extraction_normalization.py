@@ -28,3 +28,9 @@ def test_extract_state_mentions_handles_names_and_abbreviations():
     text = "O governador de Pernambuco visitou Recife - PE."
     mentions = extract_state_mentions(text)
     assert mentions == {"PE"}
+
+
+def test_extract_state_mentions_detects_estado_de_pattern():
+    text = "O Estado de sao paulo anunciou medidas junto ao Estado do Rio Grande do Norte."
+    mentions = extract_state_mentions(text)
+    assert mentions == {"SP", "RN"}
