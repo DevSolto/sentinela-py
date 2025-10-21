@@ -24,7 +24,7 @@ class ArticlePayload(BaseModel):
     #: Resumo opcional do conteúdo para visualização rápida.
     summary: str | None = None
     #: Lista de cidades associadas ao artigo fornecidas pela integração.
-    cities: tuple[str, ...] = Field(default_factory=tuple)
+    cities: list[str] = Field(default_factory=list)
 
     def to_domain(self) -> Article:
         """Converte os dados validados em uma entidade de domínio ``Article``."""
@@ -36,7 +36,7 @@ class ArticlePayload(BaseModel):
             content=self.content,
             summary=self.summary,
             published_at=self.published_at,
-            cities=self.cities,
+            cities=tuple(self.cities),
         )
 
 
