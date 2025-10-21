@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, Protocol
+from typing import Iterable, Mapping, Protocol
+
+from sentinela.domain.entities.article import CityMention
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +133,11 @@ class ArticleCitiesWriter(Protocol):
     """Synchronizes the aggregated list of cities associated with an article."""
 
     def update_article_cities(
-        self, url: str, cities: tuple[str, ...], *, portal: str | None = None
+        self,
+        url: str,
+        cities: tuple[CityMention, ...],
+        *,
+        portal: str | None = None,
+        metadata: Mapping[str, object] | None = None,
     ) -> None:
         """Persist the list of resolved cities for the given article."""

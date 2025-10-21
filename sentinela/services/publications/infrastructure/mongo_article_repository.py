@@ -6,7 +6,7 @@ from typing import Iterable
 
 from pymongo.collection import Collection
 
-from ..domain import Article
+from ..domain import Article, CityMention
 from ..domain.repositories import ArticleRepository
 
 
@@ -35,6 +35,13 @@ class MongoArticleRepository(ArticleRepository):
         self._collection.create_index(
             [
                 ("cities", 1),
+                ("published_at", 1),
+            ],
+            background=True,
+        )
+        self._collection.create_index(
+            [
+                ("cities.identifier", 1),
                 ("published_at", 1),
             ],
             background=True,
@@ -72,7 +79,7 @@ class MongoArticleRepository(ArticleRepository):
             yield self._deserialize_article(data)
 
     def _serialize_article(self, article: Article) -> dict:
-        return {
+        document = {
             "portal_name": article.portal_name,
             "title": article.title,
             "url": article.url,
@@ -80,11 +87,18 @@ class MongoArticleRepository(ArticleRepository):
             "summary": article.summary,
             "classification": article.classification,
             "published_at": article.published_at,
-            "cities": list(article.cities),
+            "cities": [mention.to_mapping() for mention in article.cities],
             "raw": article.raw,
         }
+        if article.cities_extraction is not None:
+            document["cities_extraction"] = article.cities_extraction
+        return document
 
     def _deserialize_article(self, data: dict) -> Article:
+        raw = dict(data.get("raw", {}))
+        extraction_metadata = data.get("cities_extraction")
+        if extraction_metadata is not None and "cities_extraction" not in raw:
+            raw["cities_extraction"] = extraction_metadata
         return Article(
             portal_name=data["portal_name"],
             title=data["title"],
@@ -93,8 +107,9 @@ class MongoArticleRepository(ArticleRepository):
             summary=data.get("summary"),
             classification=data.get("classification"),
             published_at=data["published_at"],
-            cities=tuple(data.get("cities") or ()),
-            raw=data.get("raw", {}),
+            cities=CityMention.parse_many(data.get("cities") or ()),
+            cities_extraction=extraction_metadata,
+            raw=raw,
         )
 
 

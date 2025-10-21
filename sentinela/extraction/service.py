@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
+
+from sentinela.domain.entities.article import CityMention
 
 from .gazetteer import CityGazetteer, find_city_pattern_matches
 from .models import (
@@ -174,7 +176,7 @@ class EntityExtractionService:
             )
             city_occurrences.append(occurrence)
 
-        aggregated_cities = _aggregate_city_identifiers(city_occurrences)
+        aggregated_cities = _aggregate_city_mentions(city_occurrences)
         if self._article_cities_writer is not None and aggregated_cities:
             self._article_cities_writer.update_article_cities(
                 document.url,
@@ -200,20 +202,103 @@ def _split_city_surface(surface: str) -> tuple[str, str | None]:
     return text, None
 
 
-def _aggregate_city_identifiers(
+def _aggregate_city_mentions(
     occurrences: list[CityOccurrence],
-) -> tuple[str, ...]:
-    """Combine city occurrences using resolved IDs when available."""
+) -> tuple[CityMention, ...]:
+    """Agrupa ocorrências de cidades preservando metadados relevantes."""
 
-    seen: set[str] = set()
-    aggregated: list[str] = []
+    entries: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    label_index: dict[str, str] = {}
+
     for occurrence in occurrences:
-        identifier = occurrence.city_id or occurrence.surface.strip()
-        if not identifier or identifier in seen:
+        surface = occurrence.surface.strip()
+        if not surface and not occurrence.city_id:
             continue
-        seen.add(identifier)
-        aggregated.append(identifier)
-    return tuple(aggregated)
+        normalized_label = surface.lower()
+        candidate = _select_candidate_for_occurrence(occurrence)
+        city_id = occurrence.city_id or candidate.get("city_id")
+        key = city_id or label_index.get(normalized_label) or normalized_label
+
+        if city_id and city_id not in entries and normalized_label in label_index:
+            previous_key = label_index[normalized_label]
+            if previous_key in entries:
+                entry = entries.pop(previous_key)
+                idx = order.index(previous_key)
+                order[idx] = city_id
+                entry["identifier"] = city_id
+                entry["city_id"] = city_id
+                entries[city_id] = entry
+                label_index[normalized_label] = city_id
+                key = city_id
+
+        if key not in entries:
+            entries[key] = {
+                "identifier": city_id or surface,
+                "city_id": city_id,
+                "label": candidate.get("label") or surface,
+                "uf": candidate.get("uf") or occurrence.uf_surface,
+                "occurrences": 0,
+                "sources": [],
+            }
+            order.append(key)
+            label_index[normalized_label] = key
+
+        entry = entries[key]
+        entry["occurrences"] += 1
+
+        if entry.get("city_id") is None and city_id:
+            entry["city_id"] = city_id
+            entry["identifier"] = city_id
+        if not entry.get("label") and candidate.get("label"):
+            entry["label"] = candidate["label"]
+        if not entry.get("uf") and (candidate.get("uf") or occurrence.uf_surface):
+            entry["uf"] = candidate.get("uf") or occurrence.uf_surface
+
+        method = occurrence.method
+        sources = entry.setdefault("sources", [])
+        if method and method not in sources:
+            sources.append(method)
+
+    mentions: list[CityMention] = []
+    for key in order:
+        data = entries[key]
+        mentions.append(
+            CityMention(
+                identifier=str(data["identifier"]),
+                city_id=str(data["city_id"]) if data.get("city_id") is not None else None,
+                label=str(data["label"]) if data.get("label") is not None else None,
+                uf=str(data["uf"]) if data.get("uf") is not None else None,
+                occurrences=int(data.get("occurrences", 1)),
+                sources=tuple(data.get("sources", ())),
+            )
+        )
+    return tuple(mentions)
+
+
+def _select_candidate_for_occurrence(occurrence: CityOccurrence) -> dict[str, Any]:
+    """Seleciona o candidato mais adequado para enriquecer a menção."""
+
+    if occurrence.city_id:
+        for candidate in occurrence.candidates:
+            if candidate.city_id == occurrence.city_id:
+                return {
+                    "city_id": candidate.city_id,
+                    "label": candidate.name,
+                    "uf": candidate.uf,
+                }
+    if occurrence.candidates:
+        top = occurrence.candidates[0]
+        return {
+            "city_id": top.city_id,
+            "label": top.name,
+            "uf": top.uf,
+        }
+    return {
+        "city_id": occurrence.city_id,
+        "label": occurrence.surface.strip(),
+        "uf": occurrence.uf_surface,
+    }
 
 
 __all__ = ["EntityExtractionService"]

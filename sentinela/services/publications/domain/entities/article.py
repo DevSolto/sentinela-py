@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from sentinela.domain.entities.article import CityMention
+
 
 @dataclass(frozen=True)
 class Article:
@@ -25,9 +27,11 @@ class Article:
     #: Classificação atribuída ao artigo após enriquecimento ou ingestão.
     classification: Optional[str] = None
     #: Cidades mencionadas ou associadas ao artigo quando disponíveis.
-    cities: tuple[str, ...] = field(default_factory=tuple)
+    cities: tuple[CityMention, ...] = field(default_factory=tuple)
+    #: Metadados de enriquecimento produzidos pela extração de cidades.
+    cities_extraction: Optional[Dict[str, Any]] = None
     #: Informações adicionais preservadas para auditoria e rastreabilidade.
     raw: Dict[str, Any] = field(default_factory=dict)
 
 
-__all__ = ["Article"]
+__all__ = ["Article", "CityMention"]

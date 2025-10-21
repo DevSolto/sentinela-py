@@ -15,7 +15,7 @@ from sentinela.services.publications import (
     PublicationsContainer,
     build_publications_container,
 )
-from sentinela.services.publications.domain import Article
+from sentinela.services.publications.domain import Article, CityMention
 from sentinela.services.publications.adapters import create_ingestion_router
 
 
@@ -95,6 +95,23 @@ class EnrichedArticleResponse(BaseModel):
     cities: list[EnrichedCityResponse]
 
 
+class CityMentionResponse(BaseModel):
+    """Resumo das cidades associadas ao artigo consultado."""
+
+    #: Identificador utilizado para filtros e compatibilidade com o legado.
+    identifier: str
+    #: Código oficial associado à cidade, quando disponível.
+    city_id: str | None = None
+    #: Nome canônico ou rótulo utilizado para exibir a cidade.
+    label: str | None = None
+    #: Unidade federativa inferida para a cidade.
+    uf: str | None = None
+    #: Quantidade de ocorrências agregadas no artigo.
+    occurrences: int = 1
+    #: Métodos responsáveis por identificar a cidade no texto.
+    sources: list[str] = Field(default_factory=list)
+
+
 class ArticleResponse(BaseModel):
     """Representação pública de um artigo armazenado."""
 
@@ -113,7 +130,7 @@ class ArticleResponse(BaseModel):
     #: Classificação atribuída ao artigo após enriquecimento.
     classification: str | None = None
     #: Cidades associadas ao artigo após coleta ou enriquecimento.
-    cities: list[str] = Field(default_factory=list)
+    cities: list[CityMentionResponse] = Field(default_factory=list)
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -194,6 +211,16 @@ def include_routes(
             raise HTTPException(status_code=404, detail="Resultado não encontrado")
         return map_enriched(result)
 
+    def _map_city_mention(mention: CityMention) -> CityMentionResponse:
+        return CityMentionResponse(
+            identifier=mention.identifier,
+            city_id=mention.city_id,
+            label=mention.label,
+            uf=mention.uf,
+            occurrences=mention.occurrences,
+            sources=list(mention.sources),
+        )
+
     def map_article_response(article: Article) -> ArticleResponse:
         return ArticleResponse(
             portal=article.portal_name,
@@ -203,7 +230,7 @@ def include_routes(
             published_at=article.published_at.isoformat(),
             summary=article.summary,
             classification=article.classification,
-            cities=list(article.cities),
+            cities=[_map_city_mention(mention) for mention in article.cities],
         )
 
     @router.get("/articles", response_model=list[ArticleResponse])
@@ -257,6 +284,7 @@ def run() -> None:
 
 
 __all__ = [
+    "CityMentionResponse",
     "ArticleResponse",
     "EnrichedArticleResponse",
     "EnrichedCandidateResponse",

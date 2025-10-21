@@ -25,7 +25,8 @@ def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
             "summary": article.summary,
             "classification": article.classification,
             "published_at": article.published_at.isoformat(),
-            "cities": list(article.cities),
+            "cities": [mention.to_mapping() for mention in article.cities],
+            "cities_extraction": article.cities_extraction,
         }
 
     @router.post("/batch")

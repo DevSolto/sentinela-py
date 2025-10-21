@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from pymongo.collection import Collection
 
+from typing import Mapping
+
+from sentinela.domain.entities.article import CityMention
 from sentinela.extraction.models import ArticleCitiesWriter
 
 
@@ -13,14 +16,26 @@ class MongoArticleCitiesWriter(ArticleCitiesWriter):
         self._collection = collection
 
     def update_article_cities(
-        self, url: str, cities: tuple[str, ...], *, portal: str | None = None
+        self,
+        url: str,
+        cities: tuple[CityMention, ...],
+        *,
+        portal: str | None = None,
+        metadata: Mapping[str, object] | None = None,
     ) -> None:
         criteria = {"url": url}
         if portal:
             criteria["portal_name"] = portal
+        update: dict[str, object] = {
+            "$set": {
+                "cities": [mention.to_mapping() for mention in cities],
+            }
+        }
+        if metadata is not None:
+            update["$set"]["cities_extraction"] = dict(metadata)
         self._collection.update_many(
             criteria,
-            {"$set": {"cities": list(cities)}},
+            update,
         )
 
 

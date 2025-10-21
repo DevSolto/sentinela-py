@@ -6,7 +6,7 @@ from typing import Iterable
 
 import httpx
 
-from sentinela.domain import Article
+from sentinela.domain import Article, CityMention
 from sentinela.domain.ports import ArticleSink
 
 
@@ -75,7 +75,8 @@ class PublicationsAPISink(ArticleSink):
             "content": article.content,
             "summary": article.summary,
             "published_at": article.published_at.isoformat(),
-            "cities": list(article.cities),
+            "cities": [mention.to_mapping() for mention in article.cities],
+            "cities_extraction": article.cities_extraction,
         }
 
     @staticmethod
@@ -89,7 +90,8 @@ class PublicationsAPISink(ArticleSink):
             content=payload["content"],
             summary=payload.get("summary"),
             published_at=datetime.fromisoformat(payload["published_at"]),
-            cities=tuple(payload.get("cities") or ()),
+            cities=CityMention.parse_many(payload.get("cities") or ()),
+            cities_extraction=payload.get("cities_extraction"),
             raw=payload.get("raw", {}),
         )
 

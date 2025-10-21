@@ -27,7 +27,14 @@ def test_article_payload_to_domain_converts_all_fields():
     assert article.summary == payload.summary
     assert article.classification == payload.classification
     assert article.published_at == payload.published_at
-    assert article.cities == ("São Paulo", "Campinas")
+    assert [mention.identifier for mention in article.cities] == [
+        "São Paulo",
+        "Campinas",
+    ]
+    assert [mention.label for mention in article.cities] == [
+        "São Paulo",
+        "Campinas",
+    ]
 
 
 def test_article_batch_payload_iterates_domain_articles():
@@ -62,11 +69,44 @@ def test_article_batch_payload_iterates_domain_articles():
         "Portaria 2",
     ]
     assert all(article.portal_name == "Diário Oficial" for article in domain_articles)
-    assert [article.cities for article in domain_articles] == [
-        ("São Paulo",),
-        ("Campinas",),
-    ]
+    assert [
+        [mention.identifier for mention in article.cities]
+        for article in domain_articles
+    ] == [["São Paulo"], ["Campinas"]]
     assert [article.classification for article in domain_articles] == [
         "portaria",
         "decreto",
     ]
+
+
+def test_article_payload_accepts_structured_city_mentions():
+    payload = ArticlePayload(
+        portal="Diário Oficial",
+        title="Portaria estruturada",
+        url="https://example.com/articles/3",
+        content="Conteúdo rico",
+        published_at=datetime(2024, 5, 21, tzinfo=timezone.utc),
+        cities=[
+            {
+                "identifier": "4205407",
+                "city_id": "4205407",
+                "label": "Florianópolis",
+                "uf": "SC",
+                "occurrences": 2,
+                "sources": ["ner", "pattern"],
+            }
+        ],
+        cities_extraction={"version": "v1"},
+    )
+
+    article = payload.to_domain()
+
+    assert len(article.cities) == 1
+    mention = article.cities[0]
+    assert mention.identifier == "4205407"
+    assert mention.city_id == "4205407"
+    assert mention.label == "Florianópolis"
+    assert mention.uf == "SC"
+    assert mention.occurrences == 2
+    assert set(mention.sources) == {"ner", "pattern"}
+    assert article.cities_extraction == {"version": "v1"}
