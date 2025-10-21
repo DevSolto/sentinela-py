@@ -137,6 +137,9 @@ def test_extraction_api_flow_and_publications_endpoint():
         article_repository=SimpleNamespace(),
         query_service=SimpleNamespace(list_articles=lambda *args, **kwargs: []),
         extraction_store=store,
+        article_cities_writer=SimpleNamespace(
+            update_article_cities=lambda *args, **kwargs: None
+        ),
     )
     include_routes(publications_app, dummy_container)
     publications_client = TestClient(publications_app)

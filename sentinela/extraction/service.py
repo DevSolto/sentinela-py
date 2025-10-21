@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 from .gazetteer import CityGazetteer, find_city_pattern_matches
 from .models import (
+    ArticleCitiesWriter,
     CityOccurrence,
     EntitySpan,
     NewsDocument,
@@ -41,6 +42,7 @@ class EntityExtractionService:
         ner_version: str,
         gazetteer_version: str,
         batch_size: int = 500,
+        article_cities_writer: ArticleCitiesWriter | None = None,
     ) -> None:
         self._news_repository = news_repository
         self._result_writer = result_writer
@@ -49,6 +51,7 @@ class EntityExtractionService:
         self._ner_version = ner_version
         self._gazetteer_version = gazetteer_version
         self._batch_size = batch_size
+        self._article_cities_writer = article_cities_writer
         self._log = logging.getLogger("sentinela.entity_extraction")
 
     def process_next_batch(self) -> ProcessedBatchResult:
@@ -146,6 +149,7 @@ class EntityExtractionService:
             )
             seen_spans.add(span)
 
+        city_occurrences: list[CityOccurrence] = []
         for entity in city_entities:
             city_name, uf_surface = _split_city_surface(entity.text)
             resolution = self._gazetteer.resolve(
@@ -172,6 +176,17 @@ class EntityExtractionService:
                 ),
                 candidates=resolution.candidates,
             )
+            city_occurrences.append(occurrence)
+
+        aggregated_cities = _aggregate_city_identifiers(city_occurrences)
+        if self._article_cities_writer is not None and aggregated_cities:
+            self._article_cities_writer.update_article_cities(
+                document.url,
+                aggregated_cities,
+                portal=document.source,
+            )
+
+        for occurrence in city_occurrences:
             self._result_writer.record_city_occurrence(document.url, occurrence)
 
 
@@ -187,6 +202,22 @@ def _split_city_surface(surface: str) -> tuple[str, str | None]:
                 name = separator.join(parts[:-1]).strip()
                 return name, uf
     return text, None
+
+
+def _aggregate_city_identifiers(
+    occurrences: list[CityOccurrence],
+) -> tuple[str, ...]:
+    """Combine city occurrences using resolved IDs when available."""
+
+    seen: set[str] = set()
+    aggregated: list[str] = []
+    for occurrence in occurrences:
+        identifier = occurrence.city_id or occurrence.surface.strip()
+        if not identifier or identifier in seen:
+            continue
+        seen.add(identifier)
+        aggregated.append(identifier)
+    return tuple(aggregated)
 
 
 __all__ = ["EntityExtractionService"]
