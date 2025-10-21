@@ -12,6 +12,7 @@ Requires-Dist: fastapi>=0.111
 Requires-Dist: uvicorn[standard]>=0.29
 Requires-Dist: sse-starlette>=2.0
 Requires-Dist: python-dotenv>=1.0
+Requires-Dist: httpx>=0.27
 Provides-Extra: dev
 Requires-Dist: pytest>=7.4; extra == "dev"
 
@@ -53,7 +54,23 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+## CLI (`sentinela-cli`)
+
+Após a instalação, o utilitário de linha de comando `sentinela-cli` fica disponível para registrar portais, executar coletas e consultar artigos diretamente do terminal. Consulte a [documentação detalhada](docs/cli.md) para exemplos, opções e variáveis de ambiente suportadas.
+
 ## Executando a API
+
+## Serviço de Extração
+
+O microserviço de extração (`sentinela.services.extraction`) consome notícias publicadas para identificar pessoas e cidades mencionadas. Após instalar o pacote execute um dos comandos abaixo:
+
+```bash
+sentinela-extraction-api   # expõe rotas REST (/enqueue, /process, /results)
+sentinela-extraction-worker # executa processamento contínuo por lotes
+```
+
+Configure `NER_VERSION`, `GAZETTEER_VERSION` e `EXTRACTION_GAZETTEER_PATH` para controlar reprocessamentos e catálogo de cidades. A coleta de notícias (`sentinela-news-api`) notifica automaticamente o worker usando o `PendingNewsQueue`, e os resultados ficam disponíveis na API de publicações via `/enriched/articles`.
+
 
 Após instalar o pacote, inicie a API REST com o comando:
 
