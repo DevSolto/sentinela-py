@@ -14,6 +14,7 @@ def test_article_payload_to_domain_converts_all_fields():
         content="Conteúdo da portaria",
         summary="Resumo curto",
         published_at=datetime(2024, 5, 20, 12, tzinfo=timezone.utc),
+        cities=["São Paulo", "Campinas"],
     )
 
     article = payload.to_domain()
@@ -24,6 +25,7 @@ def test_article_payload_to_domain_converts_all_fields():
     assert article.content == payload.content
     assert article.summary == payload.summary
     assert article.published_at == payload.published_at
+    assert article.cities == ("São Paulo", "Campinas")
 
 
 def test_article_batch_payload_iterates_domain_articles():
@@ -35,6 +37,7 @@ def test_article_batch_payload_iterates_domain_articles():
                 url="https://example.com/articles/1",
                 content="Conteúdo 1",
                 published_at=datetime(2024, 5, 19, tzinfo=timezone.utc),
+                cities=["São Paulo"],
             ),
             ArticlePayload(
                 portal="Diário Oficial",
@@ -42,6 +45,7 @@ def test_article_batch_payload_iterates_domain_articles():
                 url="https://example.com/articles/2",
                 content="Conteúdo 2",
                 published_at=datetime(2024, 5, 20, tzinfo=timezone.utc),
+                cities=["Campinas"],
             ),
         ]
     )
@@ -54,3 +58,7 @@ def test_article_batch_payload_iterates_domain_articles():
         "Portaria 2",
     ]
     assert all(article.portal_name == "Diário Oficial" for article in domain_articles)
+    assert [article.cities for article in domain_articles] == [
+        ("São Paulo",),
+        ("Campinas",),
+    ]
