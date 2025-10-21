@@ -5,7 +5,37 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from sentinela.services.publications.domain import Article
+from sentinela.services.publications.domain import Article, CityMention
+
+
+class CityMentionPayload(BaseModel):
+    """Representa uma cidade associada ao artigo em requisições externas."""
+
+    identifier: str | None = None
+    city_id: str | None = None
+    label: str | None = None
+    uf: str | None = None
+    occurrences: int | None = None
+    sources: list[str] | None = None
+
+    def to_domain(self) -> CityMention:
+        identifier = self.identifier or self.city_id or self.label
+        if not identifier:
+            raise ValueError("city payload requires at least identifier, city_id or label")
+        occurrences = self.occurrences or 1
+        if occurrences <= 0:
+            occurrences = 1
+        sources_tuple = tuple(
+            str(item) for item in (self.sources or ()) if str(item)
+        )
+        return CityMention(
+            identifier=str(identifier),
+            city_id=str(self.city_id) if self.city_id is not None else None,
+            label=self.label,
+            uf=self.uf,
+            occurrences=occurrences,
+            sources=sources_tuple,
+        )
 
 
 class ArticlePayload(BaseModel):
@@ -26,11 +56,25 @@ class ArticlePayload(BaseModel):
     #: Classificação atribuída ao artigo pela integração ou enriquecimento.
     classification: str | None = None
     #: Lista de cidades associadas ao artigo fornecidas pela integração.
-    cities: list[str] = Field(default_factory=list)
+    cities: list[CityMentionPayload | str] = Field(default_factory=list)
+    #: Metadados gerados por pipelines de extração de cidades.
+    cities_extraction: dict[str, object] | None = None
 
     def to_domain(self) -> Article:
         """Converte os dados validados em uma entidade de domínio ``Article``."""
 
+        mentions: list[CityMention] = []
+        for item in self.cities:
+            if isinstance(item, CityMentionPayload):
+                try:
+                    mentions.append(item.to_domain())
+                except ValueError:
+                    continue
+            else:
+                try:
+                    mentions.append(CityMention.from_raw(item))
+                except ValueError:
+                    continue
         return Article(
             portal_name=self.portal,
             title=self.title,
@@ -39,8 +83,9 @@ class ArticlePayload(BaseModel):
             summary=self.summary,
             classification=self.classification,
             published_at=self.published_at,
-            cities=tuple(self.cities),
+            cities=tuple(mentions),
+            cities_extraction=self.cities_extraction,
         )
 
 
-__all__ = ["ArticlePayload"]
+__all__ = ["ArticlePayload", "CityMentionPayload"]

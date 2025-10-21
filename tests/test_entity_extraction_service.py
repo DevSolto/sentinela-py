@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Iterable, List
 
+from sentinela.domain import CityMention
 from sentinela.extraction import (
     CityGazetteer,
     CityRecord,
@@ -60,12 +61,19 @@ class FakeResultWriter(ExtractionResultWriter):
 
 class FakeArticleCitiesWriter:
     def __init__(self) -> None:
-        self.updates: list[tuple[str, tuple[str, ...], str | None]] = []
+        self.updates: list[
+            tuple[str, tuple[CityMention, ...], str | None, dict[str, object] | None]
+        ] = []
 
     def update_article_cities(
-        self, url: str, cities: tuple[str, ...], *, portal: str | None = None
+        self,
+        url: str,
+        cities: tuple[CityMention, ...],
+        *,
+        portal: str | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> None:
-        self.updates.append((url, cities, portal))
+        self.updates.append((url, cities, portal, metadata))
 
 
 def test_entity_extraction_service_processes_people_and_cities():
@@ -120,10 +128,11 @@ def test_entity_extraction_service_processes_people_and_cities():
     assert city_occurrence.status in {"resolved", "ambiguous"}
     assert city_occurrence.uf_surface in {"PE", None}
     assert len(article_cities_writer.updates) == 1
-    updated_url, updated_cities, updated_portal = article_cities_writer.updates[0]
+    updated_url, updated_cities, updated_portal, metadata = article_cities_writer.updates[0]
     assert updated_url == document.url
     assert updated_portal == document.source
     assert any(
-        identifier == "1" or identifier.startswith("Recife")
-        for identifier in updated_cities
+        mention.identifier == "1" or (mention.label or "").startswith("Recife")
+        for mention in updated_cities
     )
+    assert metadata is None

@@ -6,7 +6,7 @@ from typing import Iterable
 
 from pymongo.collection import Collection
 
-from ..domain import Article
+from ..domain import Article, CityMention
 from ..domain.repositories import ArticleReadRepository
 
 
@@ -25,15 +25,32 @@ class MongoArticleReadRepository(ArticleReadRepository):
         *,
         city: str | None = None,
     ) -> Iterable[Article]:
-        criteria: dict[str, object] = {
+        base_criteria: dict[str, object] = {
             "portal_name": portal_name,
             "published_at": {"$gte": start, "$lte": end},
         }
         if city:
-            criteria["cities"] = city
+            criteria = {
+                "$and": [
+                    base_criteria,
+                    {
+                        "$or": [
+                            {"cities": city},
+                            {"cities.identifier": city},
+                            {"cities.city_id": city},
+                        ]
+                    },
+                ]
+            }
+        else:
+            criteria = base_criteria
         cursor = self._collection.find(criteria).sort("published_at", 1)
         for data in cursor:
-            cities = tuple(data.get("cities") or ())
+            cities = CityMention.parse_many(data.get("cities") or ())
+            extraction_metadata = data.get("cities_extraction")
+            raw = dict(data.get("raw", {}))
+            if extraction_metadata is not None and "cities_extraction" not in raw:
+                raw["cities_extraction"] = extraction_metadata
             yield Article(
                 portal_name=data["portal_name"],
                 title=data["title"],
@@ -43,7 +60,8 @@ class MongoArticleReadRepository(ArticleReadRepository):
                 classification=data.get("classification"),
                 published_at=data["published_at"],
                 cities=cities,
-                raw=data.get("raw", {}),
+                cities_extraction=extraction_metadata,
+                raw=raw,
             )
 
 

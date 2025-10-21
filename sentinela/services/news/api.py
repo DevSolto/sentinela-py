@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from sentinela.domain import Article
+from sentinela.domain import Article, CityMention
 from sentinela.services.extraction import notify_news_ready
 from sentinela.services.news import NewsContainer, build_news_container
 
@@ -27,6 +27,17 @@ class CollectRequest(BaseModel):
     start_date: date
     #: Data final opcional; quando omitida utiliza ``start_date``.
     end_date: date | None = None
+
+
+class CityMentionResponse(BaseModel):
+    """Resumo da menção de cidade associada a um artigo."""
+
+    identifier: str
+    city_id: str | None = None
+    label: str | None = None
+    uf: str | None = None
+    occurrences: int = 1
+    sources: list[str] = Field(default_factory=list)
 
 
 class ArticleResponse(BaseModel):
@@ -45,7 +56,7 @@ class ArticleResponse(BaseModel):
     #: Resumo opcional presente na listagem de notícias.
     summary: str | None = None
     #: Cidades relacionadas ao artigo já identificadas pela pipeline.
-    cities: list[str] = Field(default_factory=list)
+    cities: list[CityMentionResponse] = Field(default_factory=list)
 
 
 class CollectResponse(BaseModel):
@@ -75,11 +86,32 @@ class ExtractionReadyRequest(BaseModel):
     #: Resumo opcional enviado junto ao artigo.
     summary: str | None = None
     #: Cidades previamente conhecidas associadas ao artigo.
-    cities: list[str] | None = None
+    cities: list[CityMentionResponse | str] | None = None
 
     def to_article(self) -> Article:
         """Converte o payload recebido em uma entidade ``Article``."""
 
+        mentions: tuple[CityMention, ...] = ()
+        if self.cities:
+            converted: list[CityMention] = []
+            for item in self.cities:
+                if isinstance(item, CityMentionResponse):
+                    converted.append(
+                        CityMention(
+                            identifier=item.identifier,
+                            city_id=item.city_id,
+                            label=item.label,
+                            uf=item.uf,
+                            occurrences=item.occurrences,
+                            sources=tuple(item.sources),
+                        )
+                    )
+                else:
+                    try:
+                        converted.append(CityMention.from_raw(item))
+                    except ValueError:
+                        continue
+            mentions = tuple(converted)
         return Article(
             portal_name=self.portal,
             title=self.title,
@@ -87,7 +119,7 @@ class ExtractionReadyRequest(BaseModel):
             content=self.content,
             published_at=datetime.fromisoformat(self.published_at),
             summary=self.summary,
-            cities=tuple(self.cities or ()),
+            cities=mentions,
         )
 
 
@@ -108,6 +140,16 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
 
     router = APIRouter(prefix=prefix, tags=["Coleta de Notícias"])
 
+    def _map_city_mention(mention: CityMention) -> CityMentionResponse:
+        return CityMentionResponse(
+            identifier=mention.identifier,
+            city_id=mention.city_id,
+            label=mention.label,
+            uf=mention.uf,
+            occurrences=mention.occurrences,
+            sources=list(mention.sources),
+        )
+
     def map_article_response(article: Article) -> ArticleResponse:
         return ArticleResponse(
             portal=article.portal_name,
@@ -116,7 +158,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
             content=article.content,
             published_at=article.published_at.isoformat(),
             summary=article.summary,
-            cities=list(article.cities),
+            cities=[_map_city_mention(mention) for mention in article.cities],
         )
 
     def handle_value_error(exc: ValueError) -> HTTPException:
@@ -247,6 +289,7 @@ def run() -> None:
 
 
 __all__ = [
+    "CityMentionResponse",
     "ArticleResponse",
     "CollectRequest",
     "CollectResponse",

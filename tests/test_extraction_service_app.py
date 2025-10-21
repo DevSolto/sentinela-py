@@ -6,7 +6,7 @@ from urllib.parse import quote
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from sentinela.domain import Article
+from sentinela.domain import Article, CityMention
 from sentinela.extraction import CityGazetteer, CityRecord, NewsDocument
 from sentinela.extraction.models import EntitySpan
 from sentinela.services.extraction import (
@@ -98,9 +98,21 @@ def _align_datetime(reference: datetime | None, value: datetime | None) -> tuple
 
 
 def _matches(document: dict[str, Any], criteria: dict[str, Any]) -> bool:
+    if not criteria:
+        return True
     for key, expected in criteria.items():
-        value = document.get(key)
+        if key == "$and":
+            clauses = expected if isinstance(expected, list) else [expected]
+            if not all(_matches(document, clause) for clause in clauses):
+                return False
+            continue
+        if key == "$or":
+            clauses = expected if isinstance(expected, list) else [expected]
+            if not any(_matches(document, clause) for clause in clauses):
+                return False
+            continue
         if key == "published_at" and isinstance(expected, dict):
+            value = document.get("published_at")
             lower = expected.get("$gte")
             upper = expected.get("$lte")
             if isinstance(lower, datetime) and isinstance(value, datetime):
@@ -113,13 +125,81 @@ def _matches(document: dict[str, Any], criteria: dict[str, Any]) -> bool:
                 return False
             continue
         if key == "cities":
-            cities = document.get("cities") or []
-            if expected not in cities:
+            if not _match_cities(document.get("cities"), expected):
+                return False
+            continue
+        if "." in key:
+            if not _match_dotted(document, key.split("."), expected):
+                return False
+            continue
+        value = document.get(key)
+        if isinstance(expected, dict):
+            if not isinstance(value, dict) or not _matches(value, expected):
                 return False
             continue
         if value != expected:
             return False
     return True
+
+
+def _match_dotted(document: Any, parts: list[str], expected: Any) -> bool:
+    if not parts:
+        return _compare_value(document, expected)
+    head, *tail = parts
+    if isinstance(document, list):
+        return any(_match_dotted(item, parts, expected) for item in document)
+    if isinstance(document, dict):
+        if head == "cities":
+            return _match_city_path(document.get("cities"), tail, expected)
+        return _match_dotted(document.get(head), tail, expected)
+    return False
+
+
+def _match_city_path(value: Any, parts: list[str], expected: Any) -> bool:
+    if not parts:
+        return _compare_value(value, expected)
+    if isinstance(value, list):
+        return any(_match_city_path(item, parts, expected) for item in value)
+    if not isinstance(value, dict):
+        return False
+    head, *tail = parts
+    if head == "identifier":
+        candidates = [
+            value.get("identifier"),
+            value.get("city_id"),
+            value.get("label"),
+            value.get("name"),
+        ]
+        if not tail:
+            return any(_compare_value(candidate, expected) for candidate in candidates)
+        return any(
+            _match_city_path(candidate, tail, expected) for candidate in candidates if candidate
+        )
+    return _match_city_path(value.get(head), tail, expected)
+
+
+def _match_cities(value: Any, expected: Any) -> bool:
+    if not value:
+        return False
+    if isinstance(value, list):
+        return any(_match_cities(item, expected) for item in value)
+    if isinstance(value, dict):
+        candidates = [
+            value.get("identifier"),
+            value.get("city_id"),
+            value.get("label"),
+            value.get("name"),
+        ]
+        return any(_compare_value(candidate, expected) for candidate in candidates)
+    return _compare_value(value, expected)
+
+
+def _compare_value(value: Any, expected: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, list):
+        return any(_compare_value(item, expected) for item in value)
+    return str(value) == str(expected)
 
 
 def _build_container(article_cities_writer=None) -> tuple:
@@ -268,7 +348,7 @@ def test_entity_extraction_updates_article_cities_in_mongo_collection():
     assert result.processed == 1
     stored = collection.documents[0]
     assert stored["url"] == article.url
-    assert "4205407" in stored["cities"]
+    assert any(city.get("identifier") == "4205407" for city in stored["cities"])
 
 
 def test_publications_api_filters_articles_by_city_after_extraction():
@@ -293,7 +373,7 @@ def test_publications_api_filters_articles_by_city_after_extraction():
         url="https://example.com/news/2",
         content="Conteúdo diverso",
         published_at=base_published_at.replace(day=13),
-        cities=("3550308",),
+        cities=(CityMention(identifier="3550308", city_id="3550308"),),
     )
     repository.save_many([tracked_article, other_article])
 
@@ -324,7 +404,9 @@ def test_publications_api_filters_articles_by_city_after_extraction():
     assert response_filtered.status_code == 200
     filtered_body = response_filtered.json()
     assert [article["url"] for article in filtered_body] == [tracked_article.url]
-    assert "4205407" in filtered_body[0]["cities"]
+    assert any(
+        city["identifier"] == "4205407" for city in filtered_body[0]["cities"]
+    )
 
     response_all = client.get(
         "/articles",
