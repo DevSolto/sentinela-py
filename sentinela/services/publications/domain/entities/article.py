@@ -22,6 +22,8 @@ class Article:
     published_at: datetime
     #: Resumo opcional disponibilizado na listagem de artigos.
     summary: Optional[str] = None
+    #: Classificação atribuída ao artigo após enriquecimento ou ingestão.
+    classification: Optional[str] = None
     #: Cidades mencionadas ou associadas ao artigo quando disponíveis.
     cities: tuple[str, ...] = field(default_factory=tuple)
     #: Informações adicionais preservadas para auditoria e rastreabilidade.

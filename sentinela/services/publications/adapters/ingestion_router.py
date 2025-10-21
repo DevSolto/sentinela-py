@@ -23,6 +23,7 @@ def create_ingestion_router(repository: ArticleRepository) -> APIRouter:
             "url": article.url,
             "content": article.content,
             "summary": article.summary,
+            "classification": article.classification,
             "published_at": article.published_at.isoformat(),
             "cities": list(article.cities),
         }
