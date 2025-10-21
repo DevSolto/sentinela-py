@@ -127,6 +127,7 @@ def test_extraction_api_flow_and_publications_endpoint():
         content=payload["content"],
         summary=None,
         published_at=datetime(2024, 5, 12, tzinfo=timezone.utc),
+        cities=tuple(),
     )
     notify_news_ready([article])
     assert queue.queued_count() >= 1

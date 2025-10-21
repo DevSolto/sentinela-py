@@ -66,6 +66,7 @@ class MongoArticleRepository(ArticleRepository):
             "content": article.content,
             "summary": article.summary,
             "published_at": article.published_at,
+            "cities": list(article.cities),
             "raw": article.raw,
         }
 
@@ -77,6 +78,7 @@ class MongoArticleRepository(ArticleRepository):
             content=data["content"],
             summary=data.get("summary"),
             published_at=data["published_at"],
+            cities=tuple(data.get("cities") or ()),
             raw=data.get("raw", {}),
         )
 

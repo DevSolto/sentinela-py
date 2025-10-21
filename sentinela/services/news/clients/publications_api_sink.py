@@ -75,6 +75,7 @@ class PublicationsAPISink(ArticleSink):
             "content": article.content,
             "summary": article.summary,
             "published_at": article.published_at.isoformat(),
+            "cities": list(article.cities),
         }
 
     @staticmethod
@@ -88,6 +89,7 @@ class PublicationsAPISink(ArticleSink):
             content=payload["content"],
             summary=payload.get("summary"),
             published_at=datetime.fromisoformat(payload["published_at"]),
+            cities=tuple(payload.get("cities") or ()),
             raw=payload.get("raw", {}),
         )
 

@@ -10,7 +10,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from sentinela.domain import Article
@@ -44,6 +44,8 @@ class ArticleResponse(BaseModel):
     published_at: str
     #: Resumo opcional presente na listagem de notícias.
     summary: str | None = None
+    #: Cidades relacionadas ao artigo já identificadas pela pipeline.
+    cities: list[str] = Field(default_factory=list)
 
 
 class CollectResponse(BaseModel):
@@ -72,6 +74,8 @@ class ExtractionReadyRequest(BaseModel):
     published_at: str
     #: Resumo opcional enviado junto ao artigo.
     summary: str | None = None
+    #: Cidades previamente conhecidas associadas ao artigo.
+    cities: list[str] | None = None
 
     def to_article(self) -> Article:
         """Converte o payload recebido em uma entidade ``Article``."""
@@ -83,6 +87,7 @@ class ExtractionReadyRequest(BaseModel):
             content=self.content,
             published_at=datetime.fromisoformat(self.published_at),
             summary=self.summary,
+            cities=tuple(self.cities or ()),
         )
 
 
@@ -111,6 +116,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
             content=article.content,
             published_at=article.published_at.isoformat(),
             summary=article.summary,
+            cities=list(article.cities),
         )
 
     def handle_value_error(exc: ValueError) -> HTTPException:

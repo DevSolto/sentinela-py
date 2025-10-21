@@ -95,6 +95,7 @@ class RequestsSoupScraper(Scraper):
                     content=content,
                     published_at=published_at,
                     summary=summary,
+                    cities=tuple(),
                     raw=raw_map,
                 )
             )
@@ -192,6 +193,7 @@ class RequestsSoupScraper(Scraper):
                         content=content,
                         published_at=published_at,
                         summary=summary,
+                        cities=tuple(),
                         raw=raw_map,
                     )
                 )
