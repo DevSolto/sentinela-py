@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import re
-from typing import Set
+import unicodedata
+from typing import List, Sequence, Set, Tuple
 
 from .models import NormalizedPersonName
 
@@ -61,6 +62,7 @@ _STATE_ABBREVIATIONS = set(_STATE_NAMES.values())
 
 _SENTENCE_REGEX = re.compile(r"[^.!?\n]+[.!?]?")
 _CONNECTORS = {"da", "de", "dos", "das", "do", "e"}
+_HYPHEN_CHARS = {"-", "‐", "‑", "‒", "–", "—", "―"}
 
 
 def normalize_article_text(text: str) -> str:
@@ -142,10 +144,53 @@ def extract_state_mentions(text: str) -> Set[str]:
     return mentions
 
 
+def _normalize_char_for_matching(char: str) -> Sequence[str]:
+    """Return the characters used for matching along with accent stripping.
+
+    The function lowers the input, removes combining marks and replaces the
+    different hyphen characters by a single whitespace so that hyphenated names
+    still respect word boundaries during matching.
+    """
+
+    if char in _HYPHEN_CHARS:
+        return (" ",)
+    if char == "\u00AD":  # soft hyphen
+        return ()
+
+    decomposed = unicodedata.normalize("NFKD", char)
+    filtered = [c for c in decomposed if unicodedata.category(c) != "Mn"]
+    if not filtered:
+        return ()
+    return tuple("".join(filtered).lower())
+
+
+def normalize_text_with_offsets(text: str) -> Tuple[str, List[int]]:
+    """Return a normalised version of ``text`` plus a map to original offsets.
+
+    The resulting string is lower-cased, stripped from accents and with hyphen
+    variants converted to regular whitespace. For each character in the
+    normalised output, the returned offsets list stores the index of the
+    originating character in ``text``. This is useful to run dictionary-based
+    matching algorithms (such as the city matcher) while keeping the ability to
+    translate matches back to the original text without losing positional
+    information.
+    """
+
+    normalised_chars: List[str] = []
+    offsets: List[int] = []
+    for index, char in enumerate(text):
+        replacements = _normalize_char_for_matching(char)
+        for replacement in replacements:
+            normalised_chars.append(replacement)
+            offsets.append(index)
+    return "".join(normalised_chars), offsets
+
+
 __all__ = [
     "NormalizedPersonName",
     "extract_state_mentions",
     "find_sentence_containing",
     "normalize_article_text",
+    "normalize_text_with_offsets",
     "normalize_person_name",
 ]
