@@ -9,7 +9,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sentinela.services.publications import (
     PublicationsContainer,
@@ -110,6 +110,8 @@ class ArticleResponse(BaseModel):
     published_at: str
     #: Resumo opcional para facilitar a leitura rápida.
     summary: str | None = None
+    #: Cidades associadas ao artigo após coleta ou enriquecimento.
+    cities: list[str] = Field(default_factory=list)
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -198,6 +200,7 @@ def include_routes(
             content=article.content,
             published_at=article.published_at.isoformat(),
             summary=article.summary,
+            cities=list(article.cities),
         )
 
     @router.get("/articles", response_model=list[ArticleResponse])

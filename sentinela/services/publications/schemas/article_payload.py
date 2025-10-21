@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sentinela.services.publications.domain import Article
 
@@ -23,6 +23,8 @@ class ArticlePayload(BaseModel):
     published_at: datetime
     #: Resumo opcional do conteúdo para visualização rápida.
     summary: str | None = None
+    #: Lista de cidades associadas ao artigo fornecidas pela integração.
+    cities: tuple[str, ...] = Field(default_factory=tuple)
 
     def to_domain(self) -> Article:
         """Converte os dados validados em uma entidade de domínio ``Article``."""
@@ -34,6 +36,7 @@ class ArticlePayload(BaseModel):
             content=self.content,
             summary=self.summary,
             published_at=self.published_at,
+            cities=self.cities,
         )
 
 

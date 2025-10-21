@@ -34,6 +34,7 @@ class MongoArticleReadRepository(ArticleReadRepository):
                 content=data["content"],
                 summary=data.get("summary"),
                 published_at=data["published_at"],
+                cities=tuple(data.get("cities") or ()),
                 raw=data.get("raw", {}),
             )
 
