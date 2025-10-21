@@ -19,7 +19,11 @@ from pydantic import BaseModel, Field
 from sentinela.domain import Article
 from sentinela.extraction import CityGazetteer, CityRecord, EntityExtractionService, NewsDocument
 from sentinela.extraction.ner import NEREngine
-from sentinela.extraction.models import ExtractionResultWriter, NewsRepository
+from sentinela.extraction.models import (
+    ArticleCitiesWriter,
+    ExtractionResultWriter,
+    NewsRepository,
+)
 
 from .adapters import (
     EnrichedArticleResult,
@@ -51,6 +55,7 @@ class ExtractionConfig:
     gazetteer: CityGazetteer | None = None
     news_repository: NewsRepository | None = None
     result_writer: ExtractionResultWriter | None = None
+    article_cities_writer: ArticleCitiesWriter | None = None
     queue: PendingNewsQueue | None = None
     result_store: ExtractionResultStore | None = None
 
@@ -91,6 +96,7 @@ class ExtractionContainer:
     service: EntityExtractionService
     news_repository: NewsRepository
     result_writer: ExtractionResultWriter
+    article_cities_writer: ArticleCitiesWriter | None
     ner_engine: NEREngine
     gazetteer: CityGazetteer
     queue: PendingNewsQueue | None
@@ -165,6 +171,8 @@ def build_extraction_container(config: ExtractionConfig) -> ExtractionContainer:
     set_default_pending_queue(queue)
     set_default_result_store(store)
 
+    article_cities_writer = config.article_cities_writer
+
     service = EntityExtractionService(
         news_repository=news_repository,
         result_writer=result_writer,
@@ -173,6 +181,7 @@ def build_extraction_container(config: ExtractionConfig) -> ExtractionContainer:
         ner_version=config.ner_version,
         gazetteer_version=config.gazetteer_version,
         batch_size=config.batch_size,
+        article_cities_writer=article_cities_writer,
     )
 
     return ExtractionContainer(
@@ -180,6 +189,7 @@ def build_extraction_container(config: ExtractionConfig) -> ExtractionContainer:
         service=service,
         news_repository=news_repository,
         result_writer=result_writer,
+        article_cities_writer=article_cities_writer,
         ner_engine=ner_engine,
         gazetteer=gazetteer,
         queue=queue,
@@ -360,6 +370,7 @@ def include_routes(app: FastAPI, container: ExtractionContainer, *, prefix: str 
             container.service = EntityExtractionService(
                 news_repository=container.news_repository,
                 result_writer=container.result_writer,
+                article_cities_writer=container.article_cities_writer,
                 ner_engine=container.ner_engine,
                 gazetteer=container.gazetteer,
                 ner_version=container.config.ner_version,

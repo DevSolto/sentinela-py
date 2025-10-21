@@ -125,3 +125,12 @@ class ExtractionResultWriter(Protocol):
 
     def record_city_occurrence(self, url: str, occurrence: CityOccurrence) -> None:
         """Persist the relation between the news and the city occurrence."""
+
+
+class ArticleCitiesWriter(Protocol):
+    """Synchronizes the aggregated list of cities associated with an article."""
+
+    def update_article_cities(
+        self, url: str, cities: tuple[str, ...], *, portal: str | None = None
+    ) -> None:
+        """Persist the list of resolved cities for the given article."""
