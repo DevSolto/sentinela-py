@@ -34,6 +34,13 @@ class MongoArticleRepository(ArticleRepository):
             ],
             background=True,
         )
+        self._collection.create_index(
+            [
+                ("cities", 1),
+                ("published_at", 1),
+            ],
+            background=True,
+        )
 
     def save_many(self, articles: Iterable[Article]) -> None:
         """Serializa e insere vários artigos de uma vez, evitando duplicatas."""

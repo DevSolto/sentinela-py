@@ -27,6 +27,7 @@ class MongoArticleReadRepository(ArticleReadRepository):
             }
         ).sort("published_at", 1)
         for data in cursor:
+            cities = tuple(data.get("cities") or ())
             yield Article(
                 portal_name=data["portal_name"],
                 title=data["title"],
@@ -34,7 +35,7 @@ class MongoArticleReadRepository(ArticleReadRepository):
                 content=data["content"],
                 summary=data.get("summary"),
                 published_at=data["published_at"],
-                cities=tuple(data.get("cities") or ()),
+                cities=cities,
                 raw=data.get("raw", {}),
             )
 
