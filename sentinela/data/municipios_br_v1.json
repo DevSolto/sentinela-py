@@ -1,0 +1,82 @@
+{
+  "data": [
+    {
+      "ibge_id": "1200401",
+      "name": "Rio Branco",
+      "region": "Norte",
+      "state": "Acre",
+      "uf": "AC"
+    },
+    {
+      "ibge_id": "2704302",
+      "name": "Maceió",
+      "region": "Nordeste",
+      "state": "Alagoas",
+      "uf": "AL"
+    },
+    {
+      "ibge_id": "2611606",
+      "name": "Recife",
+      "region": "Nordeste",
+      "state": "Pernambuco",
+      "uf": "PE"
+    },
+    {
+      "ibge_id": "3550308",
+      "name": "São Paulo",
+      "region": "Sudeste",
+      "state": "São Paulo",
+      "uf": "SP"
+    },
+    {
+      "ibge_id": "3304557",
+      "name": "Rio de Janeiro",
+      "region": "Sudeste",
+      "state": "Rio de Janeiro",
+      "uf": "RJ"
+    },
+    {
+      "ibge_id": "2927408",
+      "name": "Salvador",
+      "region": "Nordeste",
+      "state": "Bahia",
+      "uf": "BA"
+    },
+    {
+      "ibge_id": "5300108",
+      "name": "Brasília",
+      "region": "Centro-Oeste",
+      "state": "Distrito Federal",
+      "uf": "DF"
+    },
+    {
+      "ibge_id": "4314902",
+      "name": "Porto Alegre",
+      "region": "Sul",
+      "state": "Rio Grande do Sul",
+      "uf": "RS"
+    },
+    {
+      "ibge_id": "3106200",
+      "name": "Belo Horizonte",
+      "region": "Sudeste",
+      "state": "Minas Gerais",
+      "uf": "MG"
+    },
+    {
+      "ibge_id": "1302603",
+      "name": "Manaus",
+      "region": "Norte",
+      "state": "Amazonas",
+      "uf": "AM"
+    }
+  ],
+  "metadata": {
+    "checksum": "d499dbb6a82631dfa4fd1872e14484e51c1a68f06151b8c7e18fe18fb2d35171",
+    "downloaded_at": "2025-10-21T19:02:21.508391Z",
+    "primary_source": "ibge",
+    "record_count": 10,
+    "source": "ibge",
+    "version": "v1"
+  }
+}
