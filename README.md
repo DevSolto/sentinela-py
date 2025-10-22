@@ -38,7 +38,25 @@ pip install -e .
 
 ## CLI (`sentinela-cli`)
 
-Após a instalação, o utilitário de linha de comando `sentinela-cli` fica disponível para registrar portais, executar coletas e consultar artigos diretamente do terminal. Consulte a [documentação detalhada](docs/cli.md) para exemplos, opções e variáveis de ambiente suportadas.
+Após a instalação, o utilitário de linha de comando `sentinela-cli` fica disponível para registrar portais, executar coletas e consultar artigos diretamente do terminal. Execute `sentinela-cli --help` para visualizar o índice de comandos ou use `sentinela-cli <comando> --help` para conhecer os parâmetros de cada subcomando.
+
+| Comando | Objetivo | Argumentos principais |
+| --- | --- | --- |
+| `register-portal <arquivo.json>` | Cadastra um portal a partir de um arquivo JSON. | Caminho para o arquivo de configuração contendo seletores e metadados obrigatórios. |
+| `list-portals` | Lista portais cadastrados. | — |
+| `collect <portal> <data_inicial> [data_final]` | Coleta notícias em um intervalo de datas. | Datas no formato `YYYY-MM-DD`; `data_final` é opcional e assume `data_inicial` quando ausente. |
+| `list-articles <portal> <data_inicial> <data_final>` | Lista artigos coletados previamente. | Datas obrigatórias no formato `YYYY-MM-DD`. |
+| `collect-all <portal> [--start-page N] [--max-pages N] [--min-date AAAA-MM-DD]` | Percorre todas as páginas configuradas para um portal. | Flags opcionais controlam limites de paginação e data mínima. |
+
+Todos os comandos aceitam a flag `--log-level` (`DEBUG`, `INFO`, `WARNING`, `ERROR`) e respeitam a variável de ambiente `SENTINELA_LOG_LEVEL`, útil para padronizar o nível de log em pipelines de CI/CD. O formato padrão de saída é `%(asctime)s %(levelname)s %(name)s - %(message)s`, conforme configurado em `sentinela/cli.py`. Um trecho típico dos logs ao rodar `collect` é apresentado abaixo:
+
+```text
+2024-05-18 10:32:11 INFO sentinela.services.news.collector - Iniciando coleta para portal=NoticiasExemplo start=2024-05-01 end=2024-05-03
+2024-05-18 10:32:13 INFO sentinela.services.news.collector - 12 notícias baixadas; 12 novas, 0 duplicadas
+12 novas notícias coletadas para 'NoticiasExemplo'.
+```
+
+Consulte a [documentação detalhada](docs/cli.md) para instruções completas, exemplos de uso e variáveis de ambiente suportadas.
 
 ## Executando a API
 
@@ -105,6 +123,10 @@ curl "http://127.0.0.1:8000/articles?portal=Noticias%20Exemplo&start_date=2024-0
 ```
 
 As respostas são retornadas em JSON, incluindo o conteúdo completo e a data de publicação das notícias.
+
+## Rollout da extração de cidades
+
+O plano operacional detalhado para implantar as melhorias de extração de cidades, incluindo estratégia de branch (`feature/cities-extraction`), PR, validação em ambiente isolado, feature flag e rollback está documentado em [docs/rollout_cities_extraction.md](docs/rollout_cities_extraction.md).
 
 ## Testes
 
