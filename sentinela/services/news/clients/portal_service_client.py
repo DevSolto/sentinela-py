@@ -50,7 +50,15 @@ class PortalServiceClient(PortalGateway):
     def get_portal(self, name: str) -> Optional[Portal]:
         """Busca um portal pelo nome percorrendo a lista fornecida pela API."""
 
-        response = self._client.get("/portals")
+        try:
+            response = self._client.get("/portals")
+        except httpx.RequestError as exc:  # pragma: no cover - network failure path
+            raise RuntimeError(
+                "Não foi possível conectar ao serviço de portais. "
+                "Verifique se a API está em execução ou ajuste a variável "
+                "PORTALS_SERVICE_URL."
+            ) from exc
+
         response.raise_for_status()
         for payload in response.json():
             if payload.get("name") == name:
