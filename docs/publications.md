@@ -22,3 +22,18 @@ O parâmetro `city` é opcional; omiti-lo mantém o comportamento anterior, reto
 ## Catálogo de municípios versionado
 
 Para garantir consistência na resolução de localidades, o módulo de publicações agora depende do catálogo versionado descrito em [`docs/cidade_catalogo.md`](./cidade_catalogo.md). O script `python -m sentinela.services.publications.city_matching.build_cache` gera o arquivo `sentinela/data/municipios_br_<versao>.json`, enriquecido com metadados de origem, checksum e data de download. A função `load_city_catalog(version)` oferece acesso simples ao JSON durante o carregamento do _gazetteer_ ou outras rotinas que necessitem do mapeamento de municípios.
+
+## Anexos
+
+### Índices da coleção `articles`
+
+| Nome | Campos | Observações |
+| --- | --- | --- |
+| `portal_url_unique` | `portal_name` ASC, `url` ASC | Garante unicidade por portal/URL e é criado com `background=True`. |
+| `portal_published_at` | `portal_name` ASC, `published_at` ASC | Usado para consultas por portal e intervalo temporal. |
+| `cities_published_at` | `cities` ASC, `published_at` ASC | Auxilia filtros por cidade normalizada. |
+| `city_identifier_published_at` | `cities.identifier` ASC, `published_at` ASC | Cobertura para identificadores legados de cidades. |
+| `city_ibge_id` | `cities.ibge_id` ASC | Otimiza buscas por código IBGE associado às menções. |
+| `city_name` | `cities.name` ASC | Suporta auditorias por nome da cidade reconhecida. |
+| `city_uf` | `cities.uf` ASC | Complementa filtros por UF. |
+| `cities_extraction_version` | `cities_extraction.version` ASC | Índice parcial (`partialFilterExpression` para documentos com versão definida) voltado para auditorias de extração. |

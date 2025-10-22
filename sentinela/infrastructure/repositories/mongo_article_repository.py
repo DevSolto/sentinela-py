@@ -10,6 +10,8 @@ from sentinela.domain import Article
 from sentinela.domain.entities.article import CityMention
 from sentinela.domain.repositories import ArticleRepository
 
+from .article_indexes import ensure_article_indexes
+
 
 class MongoArticleRepository(ArticleRepository):
     """Gerencia a persistência de :class:`Article` em coleções MongoDB."""
@@ -20,35 +22,7 @@ class MongoArticleRepository(ArticleRepository):
         self._collection: Collection = collection
         """Coleção MongoDB responsável por armazenar artigos coletados."""
 
-        self._collection.create_index(
-            [
-                ("portal_name", 1),
-                ("url", 1),
-            ],
-            unique=True,
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("portal_name", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("cities", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("cities.identifier", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
+        ensure_article_indexes(self._collection)
 
     def save_many(self, articles: Iterable[Article]) -> None:
         """Serializa e insere vários artigos de uma vez, evitando duplicatas."""

@@ -8,6 +8,7 @@ from pymongo.collection import Collection
 
 from ..domain import Article, CityMention
 from ..domain.repositories import ArticleRepository
+from sentinela.infrastructure.repositories.article_indexes import ensure_article_indexes
 
 
 class MongoArticleRepository(ArticleRepository):
@@ -17,35 +18,7 @@ class MongoArticleRepository(ArticleRepository):
         self._collection: Collection = collection
         """Coleção MongoDB responsável por armazenar os artigos."""
 
-        self._collection.create_index(
-            [
-                ("portal_name", 1),
-                ("url", 1),
-            ],
-            unique=True,
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("portal_name", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("cities", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
-        self._collection.create_index(
-            [
-                ("cities.identifier", 1),
-                ("published_at", 1),
-            ],
-            background=True,
-        )
+        ensure_article_indexes(self._collection)
 
     def save_many(self, articles: Iterable[Article]) -> None:
         documents = [self._serialize_article(article) for article in articles]
