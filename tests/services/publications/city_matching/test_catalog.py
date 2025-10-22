@@ -145,6 +145,29 @@ def test_load_city_catalog_reads_from_storage_before_fetch(monkeypatch, tmp_path
     assert stored == storage_payload
 
 
+def test_load_city_catalog_uses_storage_even_without_ensure(monkeypatch, tmp_path: Path) -> None:
+    cache_path = tmp_path / "catalog.json"
+    _write_catalog(cache_path, record_count=10)
+
+    monkeypatch.setattr(catalog_module, "get_cache_path", lambda version=None: cache_path)
+
+    storage_payload = {
+        "metadata": {"record_count": 6000, "version": "test"},
+        "data": [
+            {"ibge_id": "3550308", "name": "São Paulo", "uf": "SP"},
+            {"ibge_id": "5208707", "name": "Goiânia", "uf": "GO"},
+        ],
+    }
+    storage = _FakeStorage(storage_payload)
+
+    result = catalog_module.load_city_catalog("test", storage=storage)
+
+    assert storage.load_calls == ["test"]
+    assert result == storage_payload
+    stored = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert stored == storage_payload
+
+
 def test_load_city_catalog_persists_refresh_into_storage(monkeypatch, tmp_path: Path) -> None:
     cache_path = tmp_path / "catalog.json"
     _write_catalog(cache_path, record_count=10)

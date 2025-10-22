@@ -65,6 +65,12 @@ def _now_isoformat() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _clone_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return deepcopy(payload)
+    return deepcopy(dict(payload))
+
+
 def _should_refresh(metadata: Mapping[str, Any] | None, minimum_record_count: int) -> bool:
     record_count = _get_record_count(metadata)
     if record_count is None:
@@ -160,6 +166,34 @@ def load_city_catalog(
 
     selected_version = version or CITY_CACHE_VERSION
     cache_path = get_cache_path(version)
+
+    stored_payload: dict[str, Any] | None = None
+    if storage is not None:
+        try:
+            cached = storage.load(selected_version)
+        except Exception as exc:  # pragma: no cover - defensive
+            log.warning(
+                "Falha ao carregar catálogo do armazenamento externo: %s", exc
+            )
+        else:
+            if isinstance(cached, Mapping):
+                stored_payload = _clone_payload(cached)
+                stored_metadata = (
+                    stored_payload.get("metadata")
+                    if isinstance(stored_payload.get("metadata"), Mapping)
+                    else None
+                )
+                if not ensure_complete or not _should_refresh(
+                    stored_metadata, minimum_record_count
+                ):
+                    _persist_payload(cache_path, stored_payload)
+                    return stored_payload
+            elif cached is not None:  # pragma: no cover - defensive
+                log.warning(
+                    "Catálogo retornado pelo armazenamento externo possui formato inesperado: %s",
+                    type(cached),
+                )
+
     if not cache_path.exists():
         raise FileNotFoundError(
             f"Catálogo de municípios não encontrado em {cache_path}. "
@@ -177,29 +211,32 @@ def load_city_catalog(
             try:
                 storage.save(selected_version, payload)
             except Exception as exc:  # pragma: no cover - defensive
-                log.warning("Falha ao sincronizar catálogo completo no armazenamento: %s", exc)
+                log.warning(
+                    "Falha ao sincronizar catálogo completo no armazenamento: %s", exc
+                )
         return payload
 
     if storage is not None:
-        try:
-            cached_payload = storage.load(selected_version)
-        except Exception as exc:  # pragma: no cover - defensive
-            log.warning("Falha ao carregar catálogo do armazenamento externo: %s", exc)
-        else:
-            if cached_payload is not None:
-                cached_metadata = (
-                    cached_payload.get("metadata")
-                    if isinstance(cached_payload, Mapping)
-                    else None
+        cached_payload = stored_payload
+        if cached_payload is None:
+            try:
+                cached = storage.load(selected_version)
+            except Exception as exc:  # pragma: no cover - defensive
+                log.warning(
+                    "Falha ao carregar catálogo do armazenamento externo: %s", exc
                 )
-                if not _should_refresh(cached_metadata, minimum_record_count):
-                    payload_dict = (
-                        deepcopy(cached_payload)
-                        if isinstance(cached_payload, Mapping)
-                        else dict(cached_payload)
-                    )
-                    _persist_payload(cache_path, payload_dict)
-                    return payload_dict
+                cached = None
+            if isinstance(cached, Mapping):
+                cached_payload = _clone_payload(cached)
+        if cached_payload is not None:
+            cached_metadata = (
+                cached_payload.get("metadata")
+                if isinstance(cached_payload.get("metadata"), Mapping)
+                else None
+            )
+            if not _should_refresh(cached_metadata, minimum_record_count):
+                _persist_payload(cache_path, cached_payload)
+                return cached_payload
 
     refreshed = _refresh_catalog(
         cache_path=cache_path,
