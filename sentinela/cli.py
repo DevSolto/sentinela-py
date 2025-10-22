@@ -169,7 +169,7 @@ def main() -> None:
             articles = news_container.collector_service.collect(
                 args.portal, start_date, end_date
             )
-        except ValueError as exc:
+        except (ValueError, RuntimeError) as exc:
             print(str(exc))
             return
         print(f"{len(articles)} novas notícias coletadas para '{args.portal}'.")
@@ -192,12 +192,16 @@ def main() -> None:
             )
     elif args.command == "collect-all":
         min_date = _parse_date(args.min_date) if args.min_date else None
-        new_articles = news_container.collector_service.collect_all_for_portal(
-            args.portal,
-            start_page=args.start_page,
-            max_pages=args.max_pages,
-            min_published_date=min_date,
-        )
+        try:
+            new_articles = news_container.collector_service.collect_all_for_portal(
+                args.portal,
+                start_page=args.start_page,
+                max_pages=args.max_pages,
+                min_published_date=min_date,
+            )
+        except (ValueError, RuntimeError) as exc:
+            print(str(exc))
+            return
         print(
             f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
         )
