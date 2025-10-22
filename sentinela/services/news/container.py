@@ -32,7 +32,7 @@ def build_news_container(
     """Build the news collection service container."""
 
     portals_url = portals_url or os.getenv(
-        "PORTALS_SERVICE_URL", "http://localhost:8001"
+        "PORTALS_SERVICE_URL", "http://127.0.0.1:8000"
     )
     publications_url = publications_url or os.getenv(
         "PUBLICATIONS_SERVICE_URL", "http://localhost:8002"
