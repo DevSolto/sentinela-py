@@ -237,3 +237,35 @@ def test_job_force_and_only_missing_flags_with_fake_collection(
     assert result.updated == 0
     assert result.skipped == 2
     assert result.ambiguous == 0
+
+
+def test_job_allows_filtering_by_portal(matcher: CityMatcher) -> None:
+    collection = FakeCollection(
+        [
+            {
+                "_id": 1,
+                "portal_name": "Portal A",
+                "url": "https://example.com/a",
+                "title": "Evento em São Paulo",
+                "content": "São Paulo recebe delegação.",
+            },
+            {
+                "_id": 2,
+                "portal_name": "Portal B",
+                "url": "https://example.com/b",
+                "title": "Campina Grande anuncia projeto",
+                "content": "Campina Grande firma acordo.",
+            },
+        ]
+    )
+    job = _build_job(collection, matcher)
+
+    result = job.run(batch_size=5, portal="Portal B")
+
+    assert result.scanned == 1
+    assert result.updated == 1
+    portal_a = next(doc for doc in collection.documents if doc["portal_name"] == "Portal A")
+    portal_b = next(doc for doc in collection.documents if doc["portal_name"] == "Portal B")
+
+    assert "cities" not in portal_a
+    assert portal_b.get("cities")

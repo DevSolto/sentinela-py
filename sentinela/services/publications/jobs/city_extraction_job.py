@@ -97,6 +97,7 @@ class CityExtractionJob:
         force: bool = False,
         only_missing: bool = False,
         dry_run: bool = False,
+        portal: str | None = None,
     ) -> CityExtractionJobResult:
         """Executa o job paginando por ``_id`` na coleção MongoDB."""
 
@@ -118,6 +119,8 @@ class CityExtractionJob:
             criteria: dict[str, Any] = {}
             if last_id is not None:
                 criteria["_id"] = {"$gt": last_id}
+            if portal:
+                criteria["portal_name"] = portal
 
             cursor = self._collection.find(criteria).sort("_id", ASCENDING).limit(batch_size)
             documents = list(cursor)
@@ -374,6 +377,11 @@ def build_default_job() -> CityExtractionJob:
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extrai cidades em lote para artigos")
     parser.add_argument(
+        "--portal",
+        type=str,
+        help="Limita o processamento a um portal específico",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Reprocessa artigos mesmo quando não há mudanças detectadas",
@@ -419,6 +427,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         force=args.force,
         only_missing=args.only_missing,
         dry_run=args.dry_run,
+        portal=args.portal,
     )
 
     summary = result.to_summary()
