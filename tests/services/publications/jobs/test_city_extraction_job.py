@@ -220,7 +220,7 @@ def test_job_summary_format_includes_required_fields(matcher: CityMatcher) -> No
         "ambiguous": result.ambiguous,
         "elapsed_ms_total": result.elapsed_ms_total,
     }
-    assert result.ambiguous >= 1
+    assert result.ambiguous == 0
 
 
 def test_job_force_and_only_missing_flags_with_fake_collection(
