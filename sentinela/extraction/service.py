@@ -177,7 +177,7 @@ class EntityExtractionService:
             city_occurrences.append(occurrence)
 
         aggregated_cities = _aggregate_city_mentions(city_occurrences)
-        if self._article_cities_writer is not None and aggregated_cities:
+        if self._article_cities_writer is not None:
             self._article_cities_writer.update_article_cities(
                 document.url,
                 aggregated_cities,

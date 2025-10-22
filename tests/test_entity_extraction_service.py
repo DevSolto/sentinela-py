@@ -136,3 +136,41 @@ def test_entity_extraction_service_processes_people_and_cities():
         for mention in updated_cities
     )
     assert metadata is None
+
+
+def test_entity_extraction_service_clears_cities_when_none_resolved():
+    document = NewsDocument(
+        url="http://example.com/no-city",
+        title="Reunião discute orçamento",
+        body="Maria Silva participou da audiência sobre economia.",
+        published_at=datetime.now(timezone.utc),
+        source="test",
+    )
+    ner_entities = [
+        EntitySpan(label="PERSON", text="Maria Silva", start=0, end=11, score=0.92)
+    ]
+    gazetteer = CityGazetteer([])
+    repository = FakeNewsRepository([document])
+    result_writer = FakeResultWriter()
+    article_cities_writer = FakeArticleCitiesWriter()
+    service = EntityExtractionService(
+        news_repository=repository,
+        result_writer=result_writer,
+        ner_engine=FakeNER(ner_entities),
+        gazetteer=gazetteer,
+        ner_version="1",
+        gazetteer_version="1",
+        batch_size=10,
+        article_cities_writer=article_cities_writer,
+    )
+
+    result = service.process_next_batch()
+
+    assert result.processed == 1
+    assert not result.errors
+    assert len(article_cities_writer.updates) == 1
+    updated_url, updated_cities, updated_portal, metadata = article_cities_writer.updates[0]
+    assert updated_url == document.url
+    assert updated_portal == document.source
+    assert updated_cities == ()
+    assert metadata is None

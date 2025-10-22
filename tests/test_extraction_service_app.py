@@ -208,12 +208,19 @@ def _compare_value(value: Any, expected: Any) -> bool:
     return str(value) == str(expected)
 
 
-def _build_container(article_cities_writer=None) -> tuple:
+def _build_container(
+    article_cities_writer=None,
+    *,
+    spans: list[EntitySpan] | None = None,
+    gazetteer_records: list[CityRecord] | None = None,
+) -> tuple:
     queue = PendingNewsQueue()
     store = ExtractionResultStore()
-    city = CityRecord(id="4205407", name="Florianópolis", uf="SC", alt_names=("Floripa",))
-    gazetteer = CityGazetteer([city])
-    spans = [
+    records = gazetteer_records or [
+        CityRecord(id="4205407", name="Florianópolis", uf="SC", alt_names=("Floripa",))
+    ]
+    gazetteer = CityGazetteer(records)
+    ner_spans = spans or [
         EntitySpan(label="PERSON", text="Maria Silva", start=0, end=11, score=0.9, method="test"),
         EntitySpan(
             label="LOC",
@@ -228,7 +235,7 @@ def _build_container(article_cities_writer=None) -> tuple:
         ner_version="ner-1",
         gazetteer_version="gaz-1",
         batch_size=5,
-        ner_engine=FakeNER(spans),
+        ner_engine=FakeNER(ner_spans),
         gazetteer=gazetteer,
         queue=queue,
         result_store=store,
