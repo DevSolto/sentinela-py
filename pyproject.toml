@@ -39,3 +39,9 @@ sentinela-extract-cities = "sentinela.services.publications.jobs.city_extraction
 where = ["."]
 include = ["sentinela*"]
 exclude = ["packages*"]
+
+[tool.setuptools]
+script-files = ["bin/sentinela-cli"]
+
+[tool.setuptools.package-data]
+"sentinela.data" = ["*.json"]

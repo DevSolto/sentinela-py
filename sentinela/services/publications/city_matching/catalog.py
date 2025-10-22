@@ -8,7 +8,7 @@ from typing import Any
 
 from .config import CITY_CACHE_VERSION
 
-_DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+_DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 
 def get_cache_path(version: str | None = None) -> Path:

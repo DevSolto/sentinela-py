@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
-import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,9 @@ from dotenv import load_dotenv
 from sentinela.domain import Portal, PortalSelectors, Selector
 from sentinela.services.news import build_news_container
 from sentinela.services.portals import build_portals_container
+from sentinela.services.publications.jobs.city_extraction_job import (
+    build_default_job as build_city_extraction_job,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,8 +64,44 @@ def parse_args() -> argparse.Namespace:
         help="Data mínima dos artigos no formato YYYY-MM-DD (inclusive)",
     )
 
+    extract_cities = subparsers.add_parser(
+        "extract-cities",
+        help="Extrai e atualiza as cidades mencionadas nos artigos coletados",
+    )
+    extract_cities.add_argument(
+        "--portal",
+        type=str,
+        help="Limita o processamento a um portal específico",
+    )
+    extract_cities.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocessa artigos mesmo quando não há mudanças detectadas",
+    )
+    extract_cities.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Limita o processamento a artigos sem hash de extração registrado",
+    )
+    extract_cities.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Quantidade de documentos por página ao consultar o MongoDB",
+    )
+    extract_cities.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Executa sem persistir alterações, exibindo apenas o resumo",
+    )
+    extract_cities.add_argument(
+        "--metrics-file",
+        type=Path,
+        help="Exporta o resumo final para um arquivo JSON",
+    )
+
     # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
-    for sp in (register, collect, list_articles, collect_all):
+    for sp in (register, collect, list_articles, collect_all, extract_cities):
         sp.add_argument(
             "--log-level",
             default=None,
@@ -130,6 +170,24 @@ def main() -> None:
         print(
             f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
         )
+    elif args.command == "extract-cities":
+        job = build_city_extraction_job()
+        result = job.run(
+            batch_size=args.batch_size,
+            force=args.force,
+            only_missing=args.only_missing,
+            dry_run=args.dry_run,
+            portal=args.portal,
+        )
+        summary = result.to_summary()
+        print(json.dumps(summary, ensure_ascii=False))
+        if args.metrics_file:
+            _write_metrics_file(args.metrics_file, summary)
+        if result.errors:
+            logging.getLogger("sentinela.cli").warning(
+                "Job finalizado com %d erros", len(result.errors)
+            )
+            sys.exit(1)
     else:
         raise ValueError(f"Comando desconhecido: {args.command}")
 
@@ -169,6 +227,17 @@ def _load_portal_from_json(path: Path) -> Portal:
 
 def _build_selector(data: dict[str, Any]) -> Selector:
     return Selector(query=data["query"], attribute=data.get("attribute"))
+
+
+def _write_metrics_file(path: Path, summary: dict[str, Any]) -> None:
+    try:
+        with path.open("w", encoding="utf-8") as stream:
+            json.dump(summary, stream, ensure_ascii=False)
+            stream.write("\n")
+    except OSError as exc:
+        logging.getLogger("sentinela.cli").error(
+            "Falha ao escrever métricas em %s: %s", path, exc
+        )
 
 
 if __name__ == "__main__":
