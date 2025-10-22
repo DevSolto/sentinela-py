@@ -191,11 +191,12 @@ Argumentos:
 | `start_date` | Data (`YYYY-MM-DD`) | Sim | Data inicial do intervalo. |
 | `end_date` | Data (`YYYY-MM-DD`) | Sim | Data final do intervalo. |
 | `--output` | Caminho | Não | Local do arquivo CSV a ser gerado (padrão: `relatorio_<portal>.csv` no diretório atual). |
+| `--apenas-com-cidades` | Flag | Não | Limita o relatório a artigos que mencionem ao menos uma cidade. |
 | `--log-level` | String | Não | Ajusta a verbosidade da execução. |
 
 O relatório possui as colunas `portal`, `titulo`, `url`, `conteudo`, `publicado_em`, `resumo`, `classificacao`, `cidade`, `cidade_id`, `uf`, `ocorrencias` e `fontes`. Quando um artigo contém múltiplas cidades, cada linha terá a mesma informação do artigo com a cidade correspondente. Se o artigo não mencionar nenhuma cidade, uma única linha é gerada com os campos `cidade`, `cidade_id`, `uf`, `ocorrencias` e `fontes` vazios.
 
-O diretório de saída é criado automaticamente quando informado via `--output`. Utilize a opção com caminhos absolutos ou relativos (`./relatorios/maio.csv`) para separar relatórios por portal ou período.
+Quando `--apenas-com-cidades` é utilizado, artigos sem qualquer menção são ignorados e não aparecem no CSV. O diretório de saída é criado automaticamente quando informado via `--output`. Utilize a opção com caminhos absolutos ou relativos (`./relatorios/maio.csv`) para separar relatórios por portal ou período.
 
 ### Exemplo completo
 

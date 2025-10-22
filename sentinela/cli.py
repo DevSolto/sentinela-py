@@ -89,6 +89,11 @@ def parse_args() -> argparse.Namespace:
             "Caminho para salvar o relatório CSV (padrão: relatorio_<portal>.csv)"
         ),
     )
+    report_articles.add_argument(
+        "--apenas-com-cidades",
+        action="store_true",
+        help="Gera linhas somente para artigos que mencionem ao menos uma cidade",
+    )
 
     extract_cities = subparsers.add_parser(
         "extract-cities",
@@ -204,6 +209,7 @@ def main() -> None:
         articles = container.query_service.list_articles(
             args.portal, start_date, end_date
         )
+        incluir_sem_cidades = not args.apenas_com_cidades
         fieldnames = [
             "portal",
             "titulo",
@@ -246,7 +252,7 @@ def main() -> None:
                             }
                         )
                         rows += 1
-                else:
+                elif incluir_sem_cidades:
                     writer.writerow(
                         {
                             **base_payload,
