@@ -23,6 +23,7 @@ from sentinela.services.publications.city_matching import (
     extract_cities_from_article,
     load_city_catalog,
 )
+from sentinela.services.publications.city_matching.storage import MongoCityCatalogStorage
 from sentinela.services.publications.infrastructure import MongoArticleCitiesWriter
 
 
@@ -363,11 +364,13 @@ def _aggregate_matches(matches: Sequence[Mapping[str, Any]]) -> tuple[CityMentio
 def build_default_job() -> CityExtractionJob:
     """Constrói o job usando dependências reais configuradas via ambiente."""
 
-    catalog = load_city_catalog()
-    matcher = CityMatcher(catalog)
-
     factory = MongoClientFactory()
     database = factory.get_database()
+
+    catalog_storage = MongoCityCatalogStorage(database["city_catalog"])
+    catalog = load_city_catalog(ensure_complete=True, storage=catalog_storage)
+    matcher = CityMatcher(catalog)
+
     collection: Collection = database["articles"]
     writer = MongoArticleCitiesWriter(collection)
 
