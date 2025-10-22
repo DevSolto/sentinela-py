@@ -12,6 +12,7 @@ O utilitário de linha de comando `sentinela-cli` fornece acesso direto aos caso
    3. [collect](#collect)
    4. [list-articles](#list-articles)
    5. [collect-all](#collect-all)
+   6. [sentinela-extract-cities](#sentinela-extract-cities)
 
 ## Visão geral
 
@@ -181,3 +182,42 @@ sentinela-cli list-articles NoticiasExemplo 2024-05-01 2024-05-03 > artigos_2024
 ```
 
 O arquivo `logs/collect.log` conterá os mesmos registros exibidos no terminal, facilitando auditoria posterior.
+
+### sentinela-extract-cities
+
+O script `sentinela-extract-cities` executa o job de extração de cidades diretamente na coleção `articles` do MongoDB. Ele é disponibilizado automaticamente após a instalação do pacote (`pip install -e .`) e reutiliza o catálogo versionado descrito em [`docs/cidade_catalogo.md`](./cidade_catalogo.md).
+
+#### Pré-requisitos
+
+- Variáveis `MONGO_URI` e `MONGO_DATABASE` apontando para a instância que armazena a coleção `articles`.
+- Arquivo de cache `sentinela/data/municipios_br_<versao>.json` correspondente à constante `CITY_CACHE_VERSION`.
+- Opcional: defina `SENTINELA_LOG_LEVEL=DEBUG` para acompanhar o processamento em detalhes.
+
+#### Argumentos disponíveis
+
+| Opção | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `--portal` | String | Não | Restringe o processamento a um único portal (`portal_name`). |
+| `--batch-size` | Inteiro | Não (padrão `100`) | Quantidade de documentos buscados por página. |
+| `--only-missing` | Flag | Não | Processa apenas artigos sem hash de extração registrado. |
+| `--force` | Flag | Não | Reprocessa artigos mesmo com hash idêntico (ignora cache). |
+| `--dry-run` | Flag | Não | Executa a extração sem persistir alterações (somente logs). |
+| `--metrics-file` | Caminho | Não | Exporta o resumo final em JSON para o arquivo informado. |
+
+#### Processar todos os portais
+
+```bash
+export MONGO_URI="mongodb://localhost:27017"
+export MONGO_DATABASE="sentinela"
+sentinela-extract-cities --only-missing --batch-size 200 --metrics-file metrics.json
+```
+
+O comando acima percorre todas as notícias cadastradas, atualiza o campo `cities` quando necessário e salva um resumo agregado em `metrics.json` (contendo campos como `processed`, `updated` e `ambiguous`). Utilize `--dry-run` para validar o impacto antes de persistir as alterações.
+
+#### Processar apenas um portal
+
+```bash
+sentinela-extract-cities --portal diario-oficial --only-missing --batch-size 100
+```
+
+Quando `--portal` é informado, somente artigos cujo `portal_name` coincide com o valor fornecido são analisados. Esse modo é útil para reprocessar um portal específico após ajustes de catálogo ou gazetteer, evitando reprocessamentos desnecessários nos demais portais. Os logs exibem o total escaneado e atualizado dentro do recorte informado.

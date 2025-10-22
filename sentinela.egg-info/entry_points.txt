@@ -1,3 +1,0 @@
-[console_scripts]
-sentinela-api = sentinela.api:run
-sentinela-cli = sentinela.cli:main
