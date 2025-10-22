@@ -21,9 +21,23 @@ A chamada segue o padrão:
 sentinela-cli <comando> [opções]
 ```
 
-Todos os subcomandos compartilham o argumento `--log-level` para ajustar a verbosidade. Além disso, a variável de ambiente `SENTINELA_LOG_LEVEL` possui prioridade sobre a opção de linha de comando e aceita os mesmos valores (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+Todos os subcomandos compartilham o argumento `--log-level` para ajustar a verbosidade. Além disso, a variável de ambiente `SENTINELA_LOG_LEVEL` possui prioridade sobre a opção de linha de comando e aceita os mesmos valores (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Quando ambos são informados, a variável de ambiente prevalece. O utilitário carrega variáveis definidas em um arquivo `.env` automaticamente via `python-dotenv`.
 
-Para que os comandos funcionem é necessário ter o MongoDB acessível e configurar as variáveis `MONGO_URI` e `MONGO_DATABASE`. Portais precisam estar cadastrados antes de executar tarefas de coleta ou listagem de artigos.
+### Pré-requisitos
+
+- Python 3.11+ com o pacote `sentinela` instalado (`pip install -e .`).
+- Banco MongoDB acessível com as variáveis `MONGO_URI` e `MONGO_DATABASE` preenchidas.
+- Portais cadastrados previamente para executar tarefas de coleta ou listagem de artigos.
+
+### Variáveis de ambiente relevantes
+
+| Nome | Função | Valor padrão |
+| --- | --- | --- |
+| `MONGO_URI` | String de conexão com o MongoDB. | `mongodb://localhost:27017` |
+| `MONGO_DATABASE` | Nome do banco de dados MongoDB. | `sentinela` |
+| `SENTINELA_LOG_LEVEL` | Define o nível de log global (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Tem precedência sobre `--log-level`. | `INFO` |
+
+> **Dica**: utilize um arquivo `.env` na raiz do projeto para centralizar as variáveis de ambiente durante o desenvolvimento local.
 
 ## Configuração de logs
 
@@ -34,6 +48,15 @@ sentinela-cli list-portals
 
 No exemplo acima o nível `DEBUG` será aplicado mesmo que a opção `--log-level` não seja informada. Caso `--log-level` seja passado explicitamente, por exemplo `--log-level WARNING`, ele é usado apenas se `SENTINELA_LOG_LEVEL` estiver ausente.
 
+Os logs seguem o formato `%(asctime)s %(levelname)s %(name)s - %(message)s`, gerando saídas como:
+
+```text
+2024-05-18 10:32:11 INFO sentinela.services.news.collector - Iniciando coleta para portal=NoticiasExemplo start=2024-05-01 end=2024-05-03
+2024-05-18 10:32:13 INFO sentinela.services.news.collector - 12 notícias baixadas; 12 novas, 0 duplicadas
+```
+
+Redirecione a saída (`> logs/coleta.log`) quando precisar consolidar registros para auditoria.
+
 ## Subcomandos
 
 ### register-portal
@@ -41,8 +64,15 @@ No exemplo acima o nível `DEBUG` será aplicado mesmo que a opção `--log-leve
 Registra um novo portal a partir de um arquivo JSON. Uso básico:
 
 ```bash
-sentinela-cli register-portal ./config/meu_portal.json
+sentinela-cli register-portal ./config/meu_portal.json [--log-level DEBUG]
 ```
+
+Argumentos:
+
+| Nome | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `path` | Caminho | Sim | Caminho para o arquivo JSON com seletores e metadados do portal. |
+| `--log-level` | String | Não | Altera o nível de log somente para esta execução. |
 
 O arquivo deve conter a seguinte estrutura mínima:
 
@@ -72,24 +102,33 @@ Campos dentro de `selectors` aceitam os blocos opcionais `listing_summary` (resu
 Lista os portais registrados:
 
 ```bash
-sentinela-cli list-portals
+sentinela-cli list-portals [--log-level DEBUG]
 ```
 
-A saída mostra cada portal no formato `- <nome>: <base_url>`. Requer conexão com o banco e portais previamente cadastrados.
+Saída esperada:
+
+```text
+- Noticias Exemplo: https://www.exemplo.com
+```
+
+Requer conexão com o banco e portais previamente cadastrados. Combine com `--log-level DEBUG` para depurar chamadas ao repositório.
 
 ### collect
 
 Coleta notícias para um portal em um intervalo de datas:
 
 ```bash
-sentinela-cli collect NoticiasExemplo 2024-05-01 2024-05-03
+sentinela-cli collect NoticiasExemplo 2024-05-01 2024-05-03 --log-level INFO
 ```
 
 Argumentos:
 
-- `portal` (obrigatório): nome do portal cadastrado.
-- `start_date` (obrigatório): data inicial no formato `YYYY-MM-DD`.
-- `end_date` (opcional): data final no mesmo formato. Quando omitida, a data inicial é usada como limite final.
+| Nome | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `portal` | String | Sim | Nome do portal cadastrado. |
+| `start_date` | Data (`YYYY-MM-DD`) | Sim | Data inicial da coleta. |
+| `end_date` | Data (`YYYY-MM-DD`) | Não | Data final (usa `start_date` se omitida). |
+| `--log-level` | String | Não | Define o nível de log da execução. |
 
 Ao concluir, o comando informa quantas novas notícias foram coletadas para o portal. Podem ocorrer exceções caso o portal não exista, o formato de data seja inválido ou haja problemas na coleta.
 
@@ -98,7 +137,7 @@ Ao concluir, o comando informa quantas novas notícias foram coletadas para o po
 Lista artigos coletados previamente para um portal:
 
 ```bash
-sentinela-cli list-articles NoticiasExemplo 2024-05-01 2024-05-03
+sentinela-cli list-articles NoticiasExemplo 2024-05-01 2024-05-03 > artigos.jsonl
 ```
 
 Argumentos obrigatórios:
@@ -114,14 +153,31 @@ Cada linha da saída contém um JSON com os campos `portal`, `titulo`, `url` e `
 Varre todas as páginas configuradas para um portal:
 
 ```bash
-sentinela-cli collect-all NoticiasExemplo --start-page 1 --max-pages 5 --min-date 2024-01-01
+sentinela-cli collect-all NoticiasExemplo --start-page 1 --max-pages 5 --min-date 2024-01-01 --log-level DEBUG
 ```
 
 Argumentos:
 
-- `portal` (obrigatório): nome do portal cadastrado.
-- `--start-page` (opcional, padrão `1`): página inicial.
-- `--max-pages` (opcional): limite máximo de páginas a processar.
-- `--min-date` (opcional): data mínima no formato `YYYY-MM-DD`; artigos mais antigos são ignorados.
+| Nome | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `portal` | String | Sim | Nome do portal cadastrado. |
+| `--start-page` | Inteiro | Não (padrão `1`) | Página inicial. |
+| `--max-pages` | Inteiro | Não | Limite máximo de páginas a processar; varre tudo quando omitido. |
+| `--min-date` | Data (`YYYY-MM-DD`) | Não | Ignora artigos mais antigos do que a data informada. |
+| `--log-level` | String | Não | Sobrescreve o nível de log na chamada. |
 
 Ao terminar, informa o número de novas notícias coletadas e os limites utilizados. Pode falhar se o portal não existir, se o formato de data estiver incorreto ou se não houver acesso às páginas do portal.
+
+### Exemplo completo
+
+O fluxo abaixo registra um portal, executa uma coleta e lista artigos enquanto grava logs em arquivo:
+
+```bash
+export MONGO_URI="mongodb://localhost:27017"
+export MONGO_DATABASE="sentinela"
+sentinela-cli register-portal ./config/meu_portal.json --log-level INFO
+sentinela-cli collect NoticiasExemplo 2024-05-01 2024-05-03 --log-level DEBUG | tee logs/collect.log
+sentinela-cli list-articles NoticiasExemplo 2024-05-01 2024-05-03 > artigos_202405.jsonl
+```
+
+O arquivo `logs/collect.log` conterá os mesmos registros exibidos no terminal, facilitando auditoria posterior.
