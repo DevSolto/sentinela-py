@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: sentinela
+Version: 0.1.0
+Summary: Coletor modular de notícias em portais com MongoDB
+Author: Sentinela
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.31
+Requires-Dist: beautifulsoup4>=4.12
+Requires-Dist: pymongo>=4.6
+Requires-Dist: fastapi>=0.111
+Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: sse-starlette>=2.0
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: httpx>=0.27
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4; extra == "dev"
