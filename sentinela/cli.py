@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ from sentinela.services.portals import build_portals_container
 from sentinela.services.publications.jobs.city_extraction_job import (
     build_default_job as build_city_extraction_job,
 )
+from sentinela.services.publications import build_publications_container
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +64,30 @@ def parse_args() -> argparse.Namespace:
         "--min-date",
         default=None,
         help="Data mínima dos artigos no formato YYYY-MM-DD (inclusive)",
+    )
+
+    report_articles = subparsers.add_parser(
+        "report-articles",
+        help=(
+            "Gera um relatório CSV com dados dos artigos e das cidades associadas"
+        ),
+    )
+    report_articles.add_argument(
+        "portal", help="Nome do portal (blog) cadastrado para filtragem"
+    )
+    report_articles.add_argument(
+        "start_date", help="Data inicial no formato YYYY-MM-DD"
+    )
+    report_articles.add_argument(
+        "end_date", help="Data final no formato YYYY-MM-DD"
+    )
+    report_articles.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "Caminho para salvar o relatório CSV (padrão: relatorio_<portal>.csv)"
+        ),
     )
 
     extract_cities = subparsers.add_parser(
@@ -169,6 +195,69 @@ def main() -> None:
         )
         print(
             f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
+        )
+    elif args.command == "report-articles":
+        start_date = _parse_date(args.start_date)
+        end_date = _parse_date(args.end_date)
+        container = build_publications_container()
+        output_path = args.output or Path(f"relatorio_{args.portal}.csv")
+        articles = container.query_service.list_articles(
+            args.portal, start_date, end_date
+        )
+        fieldnames = [
+            "portal",
+            "titulo",
+            "url",
+            "publicado_em",
+            "resumo",
+            "classificacao",
+            "cidade",
+            "cidade_id",
+            "uf",
+            "ocorrencias",
+            "fontes",
+        ]
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        rows = 0
+        with output_path.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fieldnames)
+            writer.writeheader()
+            for article in articles:
+                base_payload = {
+                    "portal": article.portal_name,
+                    "titulo": article.title,
+                    "url": article.url,
+                    "publicado_em": article.published_at.isoformat(),
+                    "resumo": article.summary or "",
+                    "classificacao": article.classification or "",
+                }
+                if article.cities:
+                    for city in article.cities:
+                        writer.writerow(
+                            {
+                                **base_payload,
+                                "cidade": city.label or city.identifier or "",
+                                "cidade_id": city.city_id or "",
+                                "uf": city.uf or "",
+                                "ocorrencias": city.occurrences,
+                                "fontes": ", ".join(city.sources),
+                            }
+                        )
+                        rows += 1
+                else:
+                    writer.writerow(
+                        {
+                            **base_payload,
+                            "cidade": "",
+                            "cidade_id": "",
+                            "uf": "",
+                            "ocorrencias": "",
+                            "fontes": "",
+                        }
+                    )
+                    rows += 1
+        print(
+            f"Relatório gerado com {rows} registro(s) em '{output_path}'."
         )
     elif args.command == "extract-cities":
         job = build_city_extraction_job()
