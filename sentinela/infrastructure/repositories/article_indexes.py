@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pymongo.collection import Collection
+from pymongo.errors import OperationFailure
 
 
 def ensure_article_indexes(collection: Collection) -> None:
@@ -49,7 +50,14 @@ def ensure_article_indexes(collection: Collection) -> None:
     )
 
     for keys, options in definitions:
-        collection.create_index(keys, **options)
+        try:
+            collection.create_index(keys, **options)
+        except OperationFailure as error:  # pragma: no cover - defensive branch
+            details = getattr(error, "details", None) or {}
+            errmsg = details.get("errmsg", str(error))
+            if error.code == 85 and "Index already exists with a different name" in errmsg:
+                continue
+            raise
 
 
 __all__ = ["ensure_article_indexes"]

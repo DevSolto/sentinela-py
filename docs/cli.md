@@ -12,7 +12,8 @@ O utilitário de linha de comando `sentinela-cli` fornece acesso direto aos caso
    3. [collect](#collect)
    4. [list-articles](#list-articles)
    5. [collect-all](#collect-all)
-   6. [extract-cities](#extract-cities)
+   6. [report-articles](#report-articles)
+   7. [extract-cities](#extract-cities)
 
 ## Visão geral
 
@@ -173,6 +174,28 @@ Argumentos:
 | `--log-level` | String | Não | Sobrescreve o nível de log na chamada. |
 
 Ao terminar, informa o número de novas notícias coletadas e os limites utilizados. Pode falhar se o portal não existir, se o formato de data estiver incorreto ou se não houver acesso às páginas do portal.
+
+### report-articles
+
+Gera um relatório CSV com os dados principais dos artigos, incluindo o texto completo, e as cidades mencionadas em cada um. Caso um artigo cite múltiplas cidades, ele aparece uma vez por cidade; se não houver menção, o campo `cidade` fica vazio.
+
+```bash
+sentinela-cli report-articles NoticiasExemplo 2024-05-01 2024-05-31 --output relatorios/maio.csv
+```
+
+Argumentos:
+
+| Nome | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `portal` | String | Sim | Nome do portal/blog cadastrado para filtrar os artigos. |
+| `start_date` | Data (`YYYY-MM-DD`) | Sim | Data inicial do intervalo. |
+| `end_date` | Data (`YYYY-MM-DD`) | Sim | Data final do intervalo. |
+| `--output` | Caminho | Não | Local do arquivo CSV a ser gerado (padrão: `relatorio_<portal>.csv` no diretório atual). |
+| `--log-level` | String | Não | Ajusta a verbosidade da execução. |
+
+O relatório possui as colunas `portal`, `titulo`, `url`, `conteudo`, `publicado_em`, `resumo`, `classificacao`, `cidade`, `cidade_id`, `uf`, `ocorrencias` e `fontes`. Quando um artigo contém múltiplas cidades, cada linha terá a mesma informação do artigo com a cidade correspondente. Se o artigo não mencionar nenhuma cidade, uma única linha é gerada com os campos `cidade`, `cidade_id`, `uf`, `ocorrencias` e `fontes` vazios.
+
+O diretório de saída é criado automaticamente quando informado via `--output`. Utilize a opção com caminhos absolutos ou relativos (`./relatorios/maio.csv`) para separar relatórios por portal ou período.
 
 ### Exemplo completo
 
