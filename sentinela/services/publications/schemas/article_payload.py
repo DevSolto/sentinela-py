@@ -13,13 +13,25 @@ class CityMentionPayload(BaseModel):
 
     identifier: str | None = None
     city_id: str | None = None
+    ibge_id: str | None = None
+    id: str | None = None
     label: str | None = None
+    name: str | None = None
+    nome: str | None = None
     uf: str | None = None
     occurrences: int | None = None
     sources: list[str] | None = None
 
     def to_domain(self) -> CityMention:
-        identifier = self.identifier or self.city_id or self.label
+        identifier = (
+            self.identifier
+            or self.city_id
+            or self.ibge_id
+            or self.id
+            or self.label
+            or self.name
+            or self.nome
+        )
         if not identifier:
             raise ValueError("city payload requires at least identifier, city_id or label")
         occurrences = self.occurrences or 1
@@ -28,10 +40,13 @@ class CityMentionPayload(BaseModel):
         sources_tuple = tuple(
             str(item) for item in (self.sources or ()) if str(item)
         )
+        city_id_value = self.city_id or self.ibge_id or self.id
+        label_value = self.label or self.name or self.nome
+        label_value_str = str(label_value) if label_value is not None else None
         return CityMention(
             identifier=str(identifier),
-            city_id=str(self.city_id) if self.city_id is not None else None,
-            label=self.label,
+            city_id=str(city_id_value) if city_id_value is not None else None,
+            label=label_value_str,
             uf=self.uf,
             occurrences=occurrences,
             sources=sources_tuple,
@@ -67,14 +82,16 @@ class ArticlePayload(BaseModel):
         for item in self.cities:
             if isinstance(item, CityMentionPayload):
                 try:
-                    mentions.append(item.to_domain())
+                    mention = item.to_domain()
                 except ValueError:
                     continue
             else:
                 try:
-                    mentions.append(CityMention.from_raw(item))
+                    mention = CityMention.from_raw(item)
                 except ValueError:
                     continue
+            if mention.city_id:
+                mentions.append(mention)
         return Article(
             portal_name=self.portal,
             title=self.title,

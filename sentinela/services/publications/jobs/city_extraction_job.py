@@ -344,12 +344,12 @@ def _aggregate_matches(matches: Sequence[Mapping[str, Any]]) -> tuple[CityMentio
     mentions: list[CityMention] = []
     for key in order:
         data = entries.get(key)
-        if not data:
+        if not data or not data.get("city_id"):
             continue
         identifier = data.get("identifier") or data.get("label") or data.get("city_id") or key
         mentions.append(
             CityMention(
-                identifier=str(identifier),
+                identifier=str(data.get("city_id") or identifier),
                 city_id=str(data["city_id"]) if data.get("city_id") is not None else None,
                 label=str(data.get("label")) if data.get("label") is not None else None,
                 uf=str(data.get("uf")) if data.get("uf") is not None else None,
