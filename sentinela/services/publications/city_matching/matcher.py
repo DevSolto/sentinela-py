@@ -59,9 +59,13 @@ class CityMatcher:
 
         self._root = _AutomatonNode()
         for entry in entries:
-            city_id = str(entry.get("ibge_id")) if entry.get("ibge_id") is not None else ""
+            ibge_id = entry.get("ibge_id")
+            canonical_name = entry.get("name")
+            if not ibge_id or not canonical_name:
+                continue
+
+            city_id = str(ibge_id)
             uf = entry.get("uf") or ""
-            canonical_name = entry.get("name") or ""
             variants: Iterable[str] = [canonical_name]
             alt_names = entry.get("alt_names")
             if isinstance(alt_names, Iterable) and not isinstance(alt_names, (str, bytes)):

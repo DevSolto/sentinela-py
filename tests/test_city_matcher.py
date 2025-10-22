@@ -87,3 +87,30 @@ def test_city_matcher_prefers_catalog_city_over_fallback_for_variants():
     assert match.city_id == "2111300"
     assert match.surface == "Sao Luis"
     assert match.method == "automaton"
+
+
+def test_city_matcher_discards_entries_without_ibge_id():
+    catalog = [
+        {"name": "Cidade Imaginária", "uf": "ZZ"},
+        {"ibge_id": "3550308", "name": "São Paulo", "uf": "SP"},
+    ]
+    matcher = CityMatcher(catalog)
+
+    text = "Reunião em Cidade Imaginária ocorre junto com agenda em São Paulo."
+    matches = matcher.find_matches(text)
+
+    assert all(match.city_id for match in matches)
+    assert {match.city_id for match in matches} == {"3550308"}
+
+
+def test_city_matcher_handles_case_and_accent_variations():
+    catalog = [{"ibge_id": "3550308", "name": "São Paulo", "uf": "SP"}]
+    matcher = CityMatcher(catalog)
+
+    text = "VISITA SAO PAULO CONFIRMADA PARA HOJE."
+    matches = matcher.find_matches(text)
+
+    assert len(matches) == 1
+    match = matches[0]
+    assert match.city_id == "3550308"
+    assert match.surface == "SAO PAULO"
