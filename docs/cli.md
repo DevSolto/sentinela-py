@@ -22,6 +22,11 @@ A chamada segue o padrão:
 sentinela-cli <comando> [opções]
 ```
 
+> **Nota**: se o comando `sentinela-cli` não estiver disponível no ambiente virtual,
+> execute `pip install -e .` (ou `pip install -e . --no-build-isolation` em ambientes
+> restritos) para registrar os scripts de console, ou utilize `python -m sentinela.cli`
+> como alternativa direta.
+
 Todos os subcomandos compartilham o argumento `--log-level` para ajustar a verbosidade. Além disso, a variável de ambiente `SENTINELA_LOG_LEVEL` possui prioridade sobre a opção de linha de comando e aceita os mesmos valores (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Quando ambos são informados, a variável de ambiente prevalece. O utilitário carrega variáveis definidas em um arquivo `.env` automaticamente via `python-dotenv`.
 
 ### Pré-requisitos
