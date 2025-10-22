@@ -122,6 +122,8 @@ def test_job_updates_articles_and_persists_metadata(fake_collection: FakeCollect
     assert result.processed == 2
     assert result.updated == 2
     assert result.skipped == 0
+    assert result.ambiguous == 0
+    assert result.elapsed_ms_total >= 0
     assert result.errors == ()
 
     first = next(doc for doc in fake_collection.documents if doc["url"] == "https://example.com/a")
@@ -147,6 +149,7 @@ def test_job_is_idempotent_when_payload_hash_matches(fake_collection: FakeCollec
     assert result.processed == 2
     assert result.updated == 0
     assert result.skipped == 2
+    assert result.ambiguous == 0
     assert result.errors == ()
 
 
@@ -159,6 +162,7 @@ def test_job_force_flag_updates_even_with_same_hash(fake_collection: FakeCollect
     result = job.run(batch_size=10, force=True)
 
     assert result.updated == 2
+    assert result.ambiguous == 0
     updated_metadata = next(doc for doc in fake_collection.documents if doc["_id"] == 1)["cities_extraction"]["ts"]
     assert updated_metadata != first_metadata
 
@@ -174,6 +178,7 @@ def test_job_only_missing_skips_documents_with_hash(fake_collection: FakeCollect
     assert result.scanned == 2
     assert result.updated == 0
     assert result.skipped == 2
+    assert result.ambiguous == 0
 
 
 def test_job_dry_run_does_not_modify_documents(fake_collection: FakeCollection, matcher: CityMatcher) -> None:
@@ -182,8 +187,37 @@ def test_job_dry_run_does_not_modify_documents(fake_collection: FakeCollection, 
     result = job.run(batch_size=10, dry_run=True)
 
     assert result.updated == 2
+    assert result.ambiguous == 0
     for document in fake_collection.documents:
         assert "cities" not in document
         assert "cities_extraction" not in document
 
     assert result.dry_run is True
+
+
+def test_job_summary_format_includes_required_fields(matcher: CityMatcher) -> None:
+    collection = FakeCollection(
+        [
+            {
+                "_id": 10,
+                "portal_name": "Especial",
+                "url": "https://example.com/special",
+                "title": "Evento em Cidade Fantasia",
+                "content": "Cidade Fantasia recebe delegação de São Paulo.",
+            }
+        ]
+    )
+    job = _build_job(collection, matcher)
+
+    result = job.run(batch_size=5)
+
+    summary = result.to_summary()
+
+    assert summary == {
+        "processed": result.processed,
+        "updated": result.updated,
+        "skipped": result.skipped,
+        "ambiguous": result.ambiguous,
+        "elapsed_ms_total": result.elapsed_ms_total,
+    }
+    assert result.ambiguous >= 1
