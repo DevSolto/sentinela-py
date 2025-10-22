@@ -26,13 +26,12 @@ class MongoArticleCitiesWriter(ArticleCitiesWriter):
         criteria = {"url": url}
         if portal:
             criteria["portal_name"] = portal
-        update: dict[str, object] = {
-            "$set": {
-                "cities": [mention.to_mapping() for mention in cities],
-            }
-        }
+        serialized_cities = [mention.to_mapping() for mention in cities]
+        update: dict[str, object] = {"$set": {"cities": serialized_cities}}
         if metadata is not None:
             update["$set"]["cities_extraction"] = dict(metadata)
+        else:
+            update.setdefault("$unset", {})["cities_extraction"] = ""
         self._collection.update_many(
             criteria,
             update,

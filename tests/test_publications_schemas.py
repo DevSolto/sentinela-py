@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sentinela.domain import CityMention
 from sentinela.services.publications.schemas import (
     ArticleBatchPayload,
     ArticlePayload,
@@ -80,22 +81,22 @@ def test_article_batch_payload_iterates_domain_articles():
 
 
 def test_article_payload_accepts_structured_city_mentions():
+    mention_mapping = CityMention(
+        identifier="4205407",
+        city_id="4205407",
+        label="Florianópolis",
+        uf="SC",
+        occurrences=2,
+        sources=("ner", "pattern"),
+    ).to_mapping()
+
     payload = ArticlePayload(
         portal="Diário Oficial",
         title="Portaria estruturada",
         url="https://example.com/articles/3",
         content="Conteúdo rico",
         published_at=datetime(2024, 5, 21, tzinfo=timezone.utc),
-        cities=[
-            {
-                "identifier": "4205407",
-                "city_id": "4205407",
-                "label": "Florianópolis",
-                "uf": "SC",
-                "occurrences": 2,
-                "sources": ["ner", "pattern"],
-            }
-        ],
+        cities=[mention_mapping],
         cities_extraction={"version": "v1"},
     )
 

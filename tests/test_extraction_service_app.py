@@ -167,8 +167,11 @@ def _match_city_path(value: Any, parts: list[str], expected: Any) -> bool:
         candidates = [
             value.get("identifier"),
             value.get("city_id"),
+            value.get("ibge_id"),
+            value.get("id"),
             value.get("label"),
             value.get("name"),
+            value.get("nome"),
         ]
         if not tail:
             return any(_compare_value(candidate, expected) for candidate in candidates)
@@ -187,8 +190,11 @@ def _match_cities(value: Any, expected: Any) -> bool:
         candidates = [
             value.get("identifier"),
             value.get("city_id"),
+            value.get("ibge_id"),
+            value.get("id"),
             value.get("label"),
             value.get("name"),
+            value.get("nome"),
         ]
         return any(_compare_value(candidate, expected) for candidate in candidates)
     return _compare_value(value, expected)
@@ -348,7 +354,7 @@ def test_entity_extraction_updates_article_cities_in_mongo_collection():
     assert result.processed == 1
     stored = collection.documents[0]
     assert stored["url"] == article.url
-    assert any(city.get("identifier") == "4205407" for city in stored["cities"])
+    assert any(city.get("ibge_id") == "4205407" for city in stored["cities"])
 
 
 def test_publications_api_filters_articles_by_city_after_extraction():
@@ -405,8 +411,9 @@ def test_publications_api_filters_articles_by_city_after_extraction():
     filtered_body = response_filtered.json()
     assert [article["url"] for article in filtered_body] == [tracked_article.url]
     assert any(
-        city["identifier"] == "4205407" for city in filtered_body[0]["cities"]
-    )
+        (city.get("city_id") or city.get("identifier")) == "4205407"
+        for city in filtered_body[0]["cities"]
+        )
 
     response_all = client.get(
         "/articles",

@@ -39,13 +39,16 @@ class CityMention:
         identifier = (
             data.get("identifier")
             or data.get("city_id")
+            or data.get("ibge_id")
+            or data.get("id")
             or data.get("label")
             or data.get("name")
+            or data.get("nome")
         )
         if identifier is None:
             raise ValueError("missing identifier for city mention")
-        city_id = data.get("city_id")
-        label = data.get("label") or data.get("name")
+        city_id = data.get("city_id") or data.get("ibge_id") or data.get("id")
+        label = data.get("label") or data.get("name") or data.get("nome")
         uf = data.get("uf")
         occurrences = data.get("occurrences")
         sources = data.get("sources")
@@ -108,8 +111,12 @@ class CityMention:
         }
         if self.city_id is not None:
             payload["city_id"] = self.city_id
+            payload["ibge_id"] = self.city_id
+            payload["id"] = self.city_id
         if self.label is not None:
             payload["label"] = self.label
+            payload["name"] = self.label
+            payload["nome"] = self.label
         if self.uf is not None:
             payload["uf"] = self.uf
         if self.sources:
