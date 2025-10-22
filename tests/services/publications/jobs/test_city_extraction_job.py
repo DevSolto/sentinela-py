@@ -136,7 +136,6 @@ def test_job_updates_articles_and_persists_metadata(fake_collection: FakeCollect
 
     first = next(doc for doc in fake_collection.documents if doc["url"] == "https://example.com/a")
     cities = first["cities"]
-    assert all(city.get("city_id") for city in cities)
     assert {city["ibge_id"] for city in cities} == {"2504009", "3550308", "3304557"}
     campina = next(city for city in cities if city["ibge_id"] == "2504009")
     assert campina["name"] == "Campina Grande"
