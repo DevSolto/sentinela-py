@@ -42,6 +42,3 @@ exclude = ["packages*"]
 
 [tool.setuptools]
 script-files = ["bin/sentinela-cli"]
-
-[tool.setuptools.package-data]
-"sentinela.data" = ["*.json"]
