@@ -57,3 +57,43 @@ def test_city_matcher_fallback_regex_marks_method_and_score():
     assert (fallback.start, fallback.end) == (expected_start, expected_end)
     assert fallback.method == "regex"
     assert fallback.score == 0.6
+
+
+def test_city_matcher_handles_accented_and_unaccented_variants():
+    catalog = [
+        {
+            "ibge_id": "2111300",
+            "name": "São Luís",
+            "uf": "MA",
+            "alt_names": ["Sao Luis", "São Luiz"],
+        }
+    ]
+    matcher = CityMatcher(catalog)
+
+    surfaces = ["São Luís", "Sao Luis"]
+    for surface in surfaces:
+        text = f"Delegação visita {surface} para assinatura de convênio."
+        matches = matcher.find_matches(text)
+
+        assert matches
+        match = next(m for m in matches if m.city_id == "2111300")
+        assert match.name == "São Luís"
+        assert match.uf == "MA"
+        assert match.surface == surface
+        assert text[match.start : match.end] == surface
+        assert match.method == "automaton"
+        assert match.score == 1.0
+
+
+def test_city_matcher_prefers_catalog_city_over_fallback_for_variants():
+    catalog = [{"ibge_id": "2111300", "name": "São Luís", "uf": "MA"}]
+    matcher = CityMatcher(catalog)
+
+    text = "Prefeitura de Sao Luis amplia vacinação."
+    matches = matcher.find_matches(text)
+
+    assert len(matches) == 1
+    match = matches[0]
+    assert match.city_id == "2111300"
+    assert match.surface == "Sao Luis"
+    assert match.method == "automaton"

@@ -221,3 +221,19 @@ def test_job_summary_format_includes_required_fields(matcher: CityMatcher) -> No
         "elapsed_ms_total": result.elapsed_ms_total,
     }
     assert result.ambiguous >= 1
+
+
+def test_job_force_and_only_missing_flags_with_fake_collection(
+    fake_collection: FakeCollection, matcher: CityMatcher
+) -> None:
+    job = _build_job(fake_collection, matcher)
+    job.run(batch_size=5)
+
+    # Mesmo com force=True, only_missing deve manter os documentos com hash existentes ignorados.
+    result = job.run(batch_size=5, force=True, only_missing=True)
+
+    assert result.scanned == 2
+    assert result.processed == 0
+    assert result.updated == 0
+    assert result.skipped == 2
+    assert result.ambiguous == 0
