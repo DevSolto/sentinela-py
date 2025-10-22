@@ -167,8 +167,11 @@ def _match_city_path(value: Any, parts: list[str], expected: Any) -> bool:
         candidates = [
             value.get("identifier"),
             value.get("city_id"),
+            value.get("ibge_id"),
+            value.get("id"),
             value.get("label"),
             value.get("name"),
+            value.get("nome"),
         ]
         if not tail:
             return any(_compare_value(candidate, expected) for candidate in candidates)
@@ -187,8 +190,11 @@ def _match_cities(value: Any, expected: Any) -> bool:
         candidates = [
             value.get("identifier"),
             value.get("city_id"),
+            value.get("ibge_id"),
+            value.get("id"),
             value.get("label"),
             value.get("name"),
+            value.get("nome"),
         ]
         return any(_compare_value(candidate, expected) for candidate in candidates)
     return _compare_value(value, expected)
@@ -202,12 +208,19 @@ def _compare_value(value: Any, expected: Any) -> bool:
     return str(value) == str(expected)
 
 
-def _build_container(article_cities_writer=None) -> tuple:
+def _build_container(
+    article_cities_writer=None,
+    *,
+    spans: list[EntitySpan] | None = None,
+    gazetteer_records: list[CityRecord] | None = None,
+) -> tuple:
     queue = PendingNewsQueue()
     store = ExtractionResultStore()
-    city = CityRecord(id="4205407", name="Florianópolis", uf="SC", alt_names=("Floripa",))
-    gazetteer = CityGazetteer([city])
-    spans = [
+    records = gazetteer_records or [
+        CityRecord(id="4205407", name="Florianópolis", uf="SC", alt_names=("Floripa",))
+    ]
+    gazetteer = CityGazetteer(records)
+    ner_spans = spans or [
         EntitySpan(label="PERSON", text="Maria Silva", start=0, end=11, score=0.9, method="test"),
         EntitySpan(
             label="LOC",
@@ -222,7 +235,7 @@ def _build_container(article_cities_writer=None) -> tuple:
         ner_version="ner-1",
         gazetteer_version="gaz-1",
         batch_size=5,
-        ner_engine=FakeNER(spans),
+        ner_engine=FakeNER(ner_spans),
         gazetteer=gazetteer,
         queue=queue,
         result_store=store,
@@ -348,7 +361,54 @@ def test_entity_extraction_updates_article_cities_in_mongo_collection():
     assert result.processed == 1
     stored = collection.documents[0]
     assert stored["url"] == article.url
-    assert any(city.get("identifier") == "4205407" for city in stored["cities"])
+    assert any(city.get("ibge_id") == "4205407" for city in stored["cities"])
+
+
+def test_entity_extraction_clears_article_cities_without_resolved_matches():
+    collection = FakeCollection()
+    repository = MongoArticleRepository(collection)
+    writer = MongoArticleCitiesWriter(collection)
+
+    article = PublicationsArticle(
+        portal_name="Diário",
+        title="Notícia antiga",
+        url="https://example.com/news/sem-cidades",
+        content="Conteúdo original",
+        published_at=datetime(2024, 5, 10, tzinfo=timezone.utc),
+        cities=(
+            CityMention(
+                identifier="Cidade Antiga",
+                label="Cidade Antiga",
+                occurrences=2,
+                sources=("regex",),
+            ),
+        ),
+    )
+    repository.save_many([article])
+
+    spans = [
+        EntitySpan(label="PERSON", text="Maria Silva", start=0, end=11, score=0.9, method="test")
+    ]
+    document = NewsDocument(
+        url=article.url,
+        title="Maria Silva participou de reunião",
+        body="Maria Silva participou de reunião virtual sobre educação.",
+        published_at=datetime(2024, 5, 12, tzinfo=timezone.utc),
+        source=article.portal_name,
+    )
+
+    container, queue, _ = _build_container(
+        article_cities_writer=writer,
+        spans=spans,
+        gazetteer_records=[],
+    )
+    queue.enqueue(document)
+
+    result = container.service.process_next_batch()
+
+    assert result.processed == 1
+    stored = collection.documents[0]
+    assert stored["cities"] == []
 
 
 def test_publications_api_filters_articles_by_city_after_extraction():
@@ -405,8 +465,9 @@ def test_publications_api_filters_articles_by_city_after_extraction():
     filtered_body = response_filtered.json()
     assert [article["url"] for article in filtered_body] == [tracked_article.url]
     assert any(
-        city["identifier"] == "4205407" for city in filtered_body[0]["cities"]
-    )
+        (city.get("city_id") or city.get("identifier")) == "4205407"
+        for city in filtered_body[0]["cities"]
+        )
 
     response_all = client.get(
         "/articles",
