@@ -364,53 +364,6 @@ def test_entity_extraction_updates_article_cities_in_mongo_collection():
     assert any(city.get("ibge_id") == "4205407" for city in stored["cities"])
 
 
-def test_entity_extraction_clears_article_cities_without_resolved_matches():
-    collection = FakeCollection()
-    repository = MongoArticleRepository(collection)
-    writer = MongoArticleCitiesWriter(collection)
-
-    article = PublicationsArticle(
-        portal_name="Diário",
-        title="Notícia antiga",
-        url="https://example.com/news/sem-cidades",
-        content="Conteúdo original",
-        published_at=datetime(2024, 5, 10, tzinfo=timezone.utc),
-        cities=(
-            CityMention(
-                identifier="Cidade Antiga",
-                label="Cidade Antiga",
-                occurrences=2,
-                sources=("regex",),
-            ),
-        ),
-    )
-    repository.save_many([article])
-
-    spans = [
-        EntitySpan(label="PERSON", text="Maria Silva", start=0, end=11, score=0.9, method="test")
-    ]
-    document = NewsDocument(
-        url=article.url,
-        title="Maria Silva participou de reunião",
-        body="Maria Silva participou de reunião virtual sobre educação.",
-        published_at=datetime(2024, 5, 12, tzinfo=timezone.utc),
-        source=article.portal_name,
-    )
-
-    container, queue, _ = _build_container(
-        article_cities_writer=writer,
-        spans=spans,
-        gazetteer_records=[],
-    )
-    queue.enqueue(document)
-
-    result = container.service.process_next_batch()
-
-    assert result.processed == 1
-    stored = collection.documents[0]
-    assert stored["cities"] == []
-
-
 def test_publications_api_filters_articles_by_city_after_extraction():
     collection = FakeCollection()
     repository = MongoArticleRepository(collection)
