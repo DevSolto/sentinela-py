@@ -3,18 +3,11 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-import re
 from typing import Any, Iterable, Iterator, Mapping, MutableMapping, Sequence
 
 from sentinela.extraction.normalization import normalize_text_with_offsets
 
 _WORD_CHAR = set("abcdefghijklmnopqrstuvwxyz0123456789")
-_FALLBACK_CONNECTORS = {"de", "da", "das", "do", "dos", "e"}
-_CONNECTOR_PATTERN = "|".join(sorted(_FALLBACK_CONNECTORS))
-_TOKEN_PATTERN = r"[A-ZÁ-Ú][\w'À-ÿ]+"
-_FALLBACK_PATTERN = re.compile(
-    rf"\b(?P<candidate>{_TOKEN_PATTERN}(?:\s+(?:{_CONNECTOR_PATTERN}\s+)?{_TOKEN_PATTERN})+)"
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,37 +152,10 @@ class CityMatcher:
                     score=1.0,
                 )
 
-    def _iter_regex_fallback(
-        self, text: str, occupied: list[tuple[int, int]]
-    ) -> Iterator[CityMatch]:
-        pattern = self._build_fallback_pattern()
-        for match in pattern.finditer(text):
-            start, end = match.span("candidate")
-            if any(not (end <= a or start >= b) for a, b in occupied):
-                continue
-            surface = match.group("candidate")
-            yield CityMatch(
-                city_id=None,
-                name=surface,
-                uf=None,
-                surface=surface,
-                start=start,
-                end=end,
-                method="regex",
-                score=0.6,
-            )
-
-    @staticmethod
-    def _build_fallback_pattern() -> re.Pattern[str]:
-        return _FALLBACK_PATTERN
-
     def find_matches(self, text: str) -> list[CityMatch]:
         matches = list(self._iter_automaton_matches(text))
-        occupied = [(match.start, match.end) for match in matches]
-        regex_matches = list(self._iter_regex_fallback(text, occupied))
-        combined = matches + regex_matches
-        combined.sort(key=lambda item: (item.start, item.end))
-        return combined
+        matches.sort(key=lambda item: (item.start, item.end))
+        return matches
 
 
 __all__ = ["CityMatcher", "CityMatch"]

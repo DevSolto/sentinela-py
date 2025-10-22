@@ -40,23 +40,13 @@ def test_city_matcher_detects_catalog_cities_with_correct_offsets():
     assert second.score == 1.0
 
 
-def test_city_matcher_fallback_regex_marks_method_and_score():
+def test_city_matcher_ignores_names_outside_catalog():
     matcher = CityMatcher({"data": []})
 
     text = "O evento ocorreu em Vila Imaginária na semana passada."
     matches = matcher.find_matches(text)
 
-    assert len(matches) == 1
-    fallback = matches[0]
-    expected_start = text.index("Vila Imaginária")
-    expected_end = expected_start + len("Vila Imaginária")
-
-    assert fallback.city_id is None
-    assert fallback.uf is None
-    assert fallback.surface == "Vila Imaginária"
-    assert (fallback.start, fallback.end) == (expected_start, expected_end)
-    assert fallback.method == "regex"
-    assert fallback.score == 0.6
+    assert matches == []
 
 
 def test_city_matcher_handles_accented_and_unaccented_variants():
