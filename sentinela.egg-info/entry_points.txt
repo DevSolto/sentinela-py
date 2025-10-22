@@ -1,5 +1,10 @@
 [console_scripts]
 sentinela-api = sentinela.api:run
+sentinela-portal-api = sentinela.services.portals.api:run
+sentinela-news-api = sentinela.services.news.api:run
+sentinela-publications-api = sentinela.services.publications.api:run
+sentinela-extraction-api = sentinela.services.extraction.app:run_api
+sentinela-extraction-worker = sentinela.services.extraction.app:run_worker
 sentinela-cli = sentinela.cli:main
 sentinela-extraction-api = sentinela.services.extraction.app:run_api
 sentinela-extraction-worker = sentinela.services.extraction.app:run_worker
