@@ -6,6 +6,7 @@ import copy
 import json
 import logging
 import sys
+import time
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any, Mapping, Sequence
@@ -33,7 +34,9 @@ class CityExtractionJobResult:
     processed: int
     updated: int
     skipped: int
+    ambiguous: int
     errors: tuple[tuple[str, str], ...]
+    elapsed_ms_total: int
     dry_run: bool = False
 
     def to_mapping(self) -> dict[str, Any]:
@@ -44,8 +47,21 @@ class CityExtractionJobResult:
             "processed": self.processed,
             "updated": self.updated,
             "skipped": self.skipped,
+            "ambiguous": self.ambiguous,
             "errors": [list(item) for item in self.errors],
+            "elapsed_ms_total": self.elapsed_ms_total,
             "dry_run": self.dry_run,
+        }
+
+    def to_summary(self) -> dict[str, int]:
+        """Retorna o resumo final com as métricas globais do job."""
+
+        return {
+            "processed": self.processed,
+            "updated": self.updated,
+            "skipped": self.skipped,
+            "ambiguous": self.ambiguous,
+            "elapsed_ms_total": self.elapsed_ms_total,
         }
 
 
@@ -72,7 +88,7 @@ class CityExtractionJob:
         self._collection = collection
         self._writer = writer
         self._matcher = matcher
-        self._log = logger or logging.getLogger("sentinela.publications.city_job")
+        self._log = logger or logging.getLogger("sentinela.city_extraction")
 
     def run(
         self,
@@ -87,12 +103,16 @@ class CityExtractionJob:
         if batch_size <= 0:
             raise ValueError("batch_size deve ser maior que zero")
 
+        job_start = time.perf_counter()
+
         scanned = 0
         processed = 0
         updated = 0
         skipped = 0
+        ambiguous_total = 0
         errors: list[tuple[str, str]] = []
         last_id: Any | None = None
+        batch_index = 0
 
         while True:
             criteria: dict[str, Any] = {}
@@ -105,6 +125,13 @@ class CityExtractionJob:
                 break
 
             scanned += len(documents)
+            batch_index += 1
+
+            batch_processed = 0
+            batch_updated = 0
+            batch_skipped = 0
+            batch_ambiguous = 0
+            batch_start = time.perf_counter()
 
             for document in documents:
                 document_id = document.get("_id")
@@ -113,9 +140,11 @@ class CityExtractionJob:
 
                 if only_missing and self._has_existing_hash(document):
                     skipped += 1
+                    batch_skipped += 1
                     continue
 
                 processed += 1
+                batch_processed += 1
 
                 try:
                     computed = self._compute_extraction(document)
@@ -131,9 +160,17 @@ class CityExtractionJob:
                 existing_hash = self._get_existing_hash(document)
                 if not force and existing_hash == computed.payload_hash:
                     skipped += 1
+                    batch_skipped += 1
                     continue
 
+                ambiguous_mentions = sum(
+                    1 for mention in computed.mentions if mention.city_id is None
+                )
+                ambiguous_total += ambiguous_mentions
+                batch_ambiguous += ambiguous_mentions
+
                 updated += 1
+                batch_updated += 1
                 url = document.get("url")
                 portal = document.get("portal_name")
                 if dry_run:
@@ -155,18 +192,37 @@ class CityExtractionJob:
                     "Artigo %s sincronizado com %d cidades", url, len(computed.mentions)
                 )
 
+            batch_elapsed_ms = int((time.perf_counter() - batch_start) * 1000)
+            self._log.info(
+                json.dumps(
+                    {
+                        "event": "batch_summary",
+                        "batch_index": batch_index,
+                        "scanned": len(documents),
+                        "processed": batch_processed,
+                        "updated": batch_updated,
+                        "skipped": batch_skipped,
+                        "ambiguous": batch_ambiguous,
+                        "elapsed_ms": batch_elapsed_ms,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        elapsed_ms_total = int((time.perf_counter() - job_start) * 1000)
+
         result = CityExtractionJobResult(
             scanned=scanned,
             processed=processed,
             updated=updated,
             skipped=skipped,
+            ambiguous=ambiguous_total,
             errors=tuple(errors),
+            elapsed_ms_total=elapsed_ms_total,
             dry_run=dry_run,
         )
 
-        self._log.info(
-            "Job concluído: %s", json.dumps(result.to_mapping(), ensure_ascii=False)
-        )
+        self._log.info(json.dumps(result.to_summary(), ensure_ascii=False))
         return result
 
     def _compute_extraction(self, document: Mapping[str, Any]) -> _ComputedExtraction:
@@ -338,6 +394,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Executa sem persistir alterações, exibindo apenas o resumo",
     )
+    parser.add_argument(
+        "--metrics-file",
+        type=str,
+        help="Exporta o resumo final para um arquivo JSON",
+    )
     return parser.parse_args(argv)
 
 
@@ -360,8 +421,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         dry_run=args.dry_run,
     )
 
-    summary = result.to_mapping()
+    summary = result.to_summary()
     print(json.dumps(summary, ensure_ascii=False))
+
+    if args.metrics_file:
+        try:
+            with open(args.metrics_file, "w", encoding="utf-8") as stream:
+                json.dump(summary, stream, ensure_ascii=False)
+                stream.write("\n")
+        except OSError as exc:  # pragma: no cover - falha de IO rara
+            logging.getLogger("sentinela.city_extraction").error(
+                "Falha ao escrever métricas em %s: %s", args.metrics_file, exc
+            )
 
     if result.errors:
         sys.exit(1)
