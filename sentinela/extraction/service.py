@@ -263,9 +263,11 @@ def _aggregate_city_mentions(
     mentions: list[CityMention] = []
     for key in order:
         data = entries[key]
+        if not data.get("city_id"):
+            continue
         mentions.append(
             CityMention(
-                identifier=str(data["identifier"]),
+                identifier=str(data.get("city_id") or data["identifier"]),
                 city_id=str(data["city_id"]) if data.get("city_id") is not None else None,
                 label=str(data["label"]) if data.get("label") is not None else None,
                 uf=str(data["uf"]) if data.get("uf") is not None else None,

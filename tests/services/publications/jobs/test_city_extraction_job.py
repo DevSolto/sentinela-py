@@ -96,6 +96,14 @@ def fake_collection() -> FakeCollection:
                 "url": "https://example.com/a",
                 "title": "Campina Grande firma acordo",
                 "content": "Campina Grande receberá apoio de São Paulo e Rio de Janeiro.",
+                "cities": [
+                    {
+                        "identifier": "Campina Grande",
+                        "label": "Campina Grande",
+                        "occurrences": 1,
+                        "sources": ["legacy"],
+                    }
+                ],
             },
             {
                 "_id": 2,
@@ -186,13 +194,13 @@ def test_job_only_missing_skips_documents_with_hash(fake_collection: FakeCollect
 def test_job_dry_run_does_not_modify_documents(fake_collection: FakeCollection, matcher: CityMatcher) -> None:
     job = _build_job(fake_collection, matcher)
 
+    original_state = [_deepcopy(doc) for doc in fake_collection.documents]
     result = job.run(batch_size=10, dry_run=True)
 
     assert result.updated == 2
     assert result.ambiguous == 0
-    for document in fake_collection.documents:
-        assert "cities" not in document
-        assert "cities_extraction" not in document
+    for before, after in zip(original_state, fake_collection.documents):
+        assert after == before
 
     assert result.dry_run is True
 

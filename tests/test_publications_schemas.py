@@ -16,7 +16,10 @@ def test_article_payload_to_domain_converts_all_fields():
         summary="Resumo curto",
         classification="portaria",
         published_at=datetime(2024, 5, 20, 12, tzinfo=timezone.utc),
-        cities=["São Paulo", "Campinas"],
+        cities=[
+            {"city_id": "3550308", "label": "São Paulo", "uf": "SP"},
+            {"city_id": "3509502", "label": "Campinas", "uf": "SP"},
+        ],
     )
 
     article = payload.to_domain()
@@ -29,8 +32,8 @@ def test_article_payload_to_domain_converts_all_fields():
     assert article.classification == payload.classification
     assert article.published_at == payload.published_at
     assert [mention.identifier for mention in article.cities] == [
-        "São Paulo",
-        "Campinas",
+        "3550308",
+        "3509502",
     ]
     assert [mention.label for mention in article.cities] == [
         "São Paulo",
@@ -48,7 +51,7 @@ def test_article_batch_payload_iterates_domain_articles():
                 content="Conteúdo 1",
                 published_at=datetime(2024, 5, 19, tzinfo=timezone.utc),
                 classification="portaria",
-                cities=["São Paulo"],
+                cities=[{"city_id": "3550308", "label": "São Paulo"}],
             ),
             ArticlePayload(
                 portal="Diário Oficial",
@@ -57,7 +60,7 @@ def test_article_batch_payload_iterates_domain_articles():
                 content="Conteúdo 2",
                 published_at=datetime(2024, 5, 20, tzinfo=timezone.utc),
                 classification="decreto",
-                cities=["Campinas"],
+                cities=[{"city_id": "3509502", "label": "Campinas"}],
             ),
         ]
     )
@@ -73,7 +76,7 @@ def test_article_batch_payload_iterates_domain_articles():
     assert [
         [mention.identifier for mention in article.cities]
         for article in domain_articles
-    ] == [["São Paulo"], ["Campinas"]]
+    ] == [["3550308"], ["3509502"]]
     assert [article.classification for article in domain_articles] == [
         "portaria",
         "decreto",

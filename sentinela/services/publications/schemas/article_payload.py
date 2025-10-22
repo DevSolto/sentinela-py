@@ -82,14 +82,16 @@ class ArticlePayload(BaseModel):
         for item in self.cities:
             if isinstance(item, CityMentionPayload):
                 try:
-                    mentions.append(item.to_domain())
+                    mention = item.to_domain()
                 except ValueError:
                     continue
             else:
                 try:
-                    mentions.append(CityMention.from_raw(item))
+                    mention = CityMention.from_raw(item)
                 except ValueError:
                     continue
+            if mention.city_id:
+                mentions.append(mention)
         return Article(
             portal_name=self.portal,
             title=self.title,
