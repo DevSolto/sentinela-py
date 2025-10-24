@@ -61,6 +61,17 @@ Consulte a [documentação detalhada](docs/cli.md) para instruções completas, 
 
 ## Executando a API
 
+Após instalar o pacote no ambiente virtual (por exemplo, com `pip install -e .`), os binários expostos pelo `pyproject.toml` f
+icam disponíveis diretamente, sem necessidade do Poetry. Dessa forma, basta ativar o ambiente virtual e executar:
+
+```bash
+source .venv/bin/activate
+sentinela-api
+```
+
+Se preferir usar `poetry run`, lembre-se de instalar o Poetry previamente (`pipx install poetry` ou `pip install poetry`). Caso o
+comando `poetry` não esteja disponível, utilize a abordagem acima ou execute o módulo diretamente com `python -m sentinela.api`.
+
 ## Serviço de Extração
 
 O microserviço de extração (`sentinela.services.extraction`) consome notícias publicadas para identificar pessoas e cidades mencionadas. Após instalar o pacote execute um dos comandos abaixo:
