@@ -12,8 +12,9 @@ O utilitário de linha de comando `sentinela-cli` fornece acesso direto aos caso
    3. [collect](#collect)
    4. [list-articles](#list-articles)
    5. [collect-all](#collect-all)
-   6. [report-articles](#report-articles)
-   7. [extract-cities](#extract-cities)
+   6. [collect-portal](#collect-portal)
+   7. [report-articles](#report-articles)
+   8. [extract-cities](#extract-cities)
 
 ## Visão geral
 
@@ -174,6 +175,23 @@ Argumentos:
 | `--log-level` | String | Não | Sobrescreve o nível de log na chamada. |
 
 Ao terminar, informa o número de novas notícias coletadas e os limites utilizados. Pode falhar se o portal não existir, se o formato de data estiver incorreto ou se não houver acesso às páginas do portal.
+
+### collect-portal
+
+Executa uma varredura completa nas páginas de listagem do portal informado, começando pela primeira página e continuando até que nenhuma notícia inédita seja encontrada.
+
+```bash
+sentinela-cli collect-portal NoticiasExemplo --log-level INFO
+```
+
+Argumentos:
+
+| Nome | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `portal` | String | Sim | Nome do portal cadastrado. |
+| `--log-level` | String | Não | Ajusta o nível de log da execução atual. |
+
+Esse comando é ideal para o primeiro carregamento de um portal recém-cadastrado, pois elimina a necessidade de informar paginação manualmente (`collect-all`) ou datas específicas (`collect`). Ele reutiliza os seletores configurados para seguir os links de listagem até que as páginas deixem de retornar novos artigos. Ao final, informa quantas notícias foram incorporadas ao banco.
 
 ### report-articles
 

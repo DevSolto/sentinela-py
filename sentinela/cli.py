@@ -66,6 +66,14 @@ def parse_args() -> argparse.Namespace:
         help="Data mínima dos artigos no formato YYYY-MM-DD (inclusive)",
     )
 
+    collect_portal = subparsers.add_parser(
+        "collect-portal",
+        help=(
+            "Varre todas as páginas de listagem de um portal até não encontrar mais artigos"
+        ),
+    )
+    collect_portal.add_argument("portal", help="Nome do portal cadastrado")
+
     report_articles = subparsers.add_parser(
         "report-articles",
         help=(
@@ -132,7 +140,14 @@ def parse_args() -> argparse.Namespace:
     )
 
     # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
-    for sp in (register, collect, list_articles, collect_all, extract_cities):
+    for sp in (
+        register,
+        collect,
+        list_articles,
+        collect_all,
+        collect_portal,
+        extract_cities,
+    ):
         sp.add_argument(
             "--log-level",
             default=None,
@@ -204,6 +219,18 @@ def main() -> None:
             return
         print(
             f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
+        )
+    elif args.command == "collect-portal":
+        try:
+            new_articles = news_container.collector_service.collect_all_for_portal(
+                args.portal
+            )
+        except (ValueError, RuntimeError) as exc:
+            print(str(exc))
+            return
+        print(
+            "{total} novas notícias coletadas em '{portal}' varrendo todas as páginas."
+            .format(total=len(new_articles), portal=args.portal)
         )
     elif args.command == "report-articles":
         start_date = _parse_date(args.start_date)

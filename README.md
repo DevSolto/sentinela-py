@@ -47,6 +47,7 @@ Após a instalação, o utilitário de linha de comando `sentinela-cli` fica dis
 | `collect <portal> <data_inicial> [data_final]` | Coleta notícias em um intervalo de datas. | Datas no formato `YYYY-MM-DD`; `data_final` é opcional e assume `data_inicial` quando ausente. |
 | `list-articles <portal> <data_inicial> <data_final>` | Lista artigos coletados previamente. | Datas obrigatórias no formato `YYYY-MM-DD`. |
 | `collect-all <portal> [--start-page N] [--max-pages N] [--min-date AAAA-MM-DD]` | Percorre todas as páginas configuradas para um portal. | Flags opcionais controlam limites de paginação e data mínima. |
+| `collect-portal <portal>` | Varre automaticamente todas as páginas de listagem disponíveis até não encontrar novos artigos. | Indique apenas o nome do portal; útil ao cadastrar um portal novo e desejar coletar todo o histórico disponível. |
 
 Todos os comandos aceitam a flag `--log-level` (`DEBUG`, `INFO`, `WARNING`, `ERROR`) e respeitam a variável de ambiente `SENTINELA_LOG_LEVEL`, útil para padronizar o nível de log em pipelines de CI/CD. O formato padrão de saída é `%(asctime)s %(levelname)s %(name)s - %(message)s`, conforme configurado em `sentinela/cli.py`. Um trecho típico dos logs ao rodar `collect` é apresentado abaixo:
 
