@@ -51,3 +51,13 @@ def test_parse_datetime_prefers_regex_after_whitespace_normalization():
     )
 
     assert parsed == datetime(2025, 10, 24, 18, 26)
+
+
+def test_parse_datetime_with_invalid_regex_raises_human_readable_error():
+    scraper = RequestsSoupScraper()
+
+    with pytest.raises(ValueError) as excinfo:
+        scraper._parse_datetime("texto sem data", date_format="(?P<published>+)")
+
+    assert "padrão de data inválido" in str(excinfo.value)
+    assert "\\d{2}" in str(excinfo.value)
