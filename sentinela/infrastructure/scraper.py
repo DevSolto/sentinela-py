@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from soupsieve import SelectorSyntaxError
 
 from sentinela.domain import Article, Portal, Selector
 
@@ -214,14 +215,31 @@ class RequestsSoupScraper(Scraper):
         couple of common fallbacks and only then raise. This reduces hard
         failures when a portal slightly changes its HTML structure.
         """
+        query = selector.query
         # Primary attempt
-        target = element.select_one(selector.query)
+        try:
+            target = element.select_one(query)
+        except SelectorSyntaxError as exc:
+            normalized_query = self._normalize_selector_query(query)
+            if normalized_query != query:
+                self._log.debug(
+                    "ajustando seletor malformado '%s' para '%s'", query, normalized_query
+                )
+                query = normalized_query
+                try:
+                    target = element.select_one(query)
+                except SelectorSyntaxError as exc2:  # pragma: no cover - raríssimo
+                    raise ValueError(
+                        f"Selector '{selector.query}' inválido: {exc2}"
+                    ) from exc2
+            else:
+                raise ValueError(
+                    f"Selector '{selector.query}' inválido: {exc}"
+                ) from exc
 
         # Fallback 1: if query ends with ' > *:first-child', try parent
-        if not target and selector.query.endswith(":first-child"):
-            simplified = selector.query.replace(" > *:first-child", "").replace(
-                ":first-child", ""
-            )
+        if not target and query.endswith(":first-child"):
+            simplified = query.replace(" > *:first-child", "").replace(":first-child", "")
             target = element.select_one(simplified)
 
         # If still not found, raise with a clear message
@@ -236,6 +254,31 @@ class RequestsSoupScraper(Scraper):
             return str(target.attrs[selector.attribute]).strip()
 
         return target.get_text(strip=True)
+
+    def _normalize_selector_query(self, query: str) -> str:
+        """Adiciona colchetes faltantes em seletores de atributo."""
+
+        open_brackets = 0
+        in_single = False
+        in_double = False
+        result: list[str] = []
+
+        for char in query:
+            result.append(char)
+            if char == "'" and not in_double:
+                in_single = not in_single
+            elif char == '"' and not in_single:
+                in_double = not in_double
+            elif not in_single and not in_double:
+                if char == "[":
+                    open_brackets += 1
+                elif char == "]" and open_brackets > 0:
+                    open_brackets -= 1
+
+        if open_brackets:
+            result.append("]" * open_brackets)
+
+        return "".join(result)
 
     def _parse_datetime(self, value: str, date_format: str) -> datetime:
         # Handle month names in Portuguese when using %B without relying on OS locale
