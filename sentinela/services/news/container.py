@@ -39,7 +39,7 @@ def build_news_container(
         or default_portals_url
     )
     publications_url = publications_url or os.getenv(
-        "PUBLICATIONS_SERVICE_URL", "http://localhost:8002"
+        "PUBLICATIONS_SERVICE_URL", "http://localhost:8081"
     )
 
     portal_gateway = PortalServiceClient(portals_url)
