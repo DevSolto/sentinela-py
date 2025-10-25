@@ -32,6 +32,21 @@ class Scraper(ABC):
         raise NotImplementedError
 
 
+_DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9," "*/*;q=0.8"
+    ),
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive",
+}
+
+
 class RequestsSoupScraper(Scraper):
     """Scraper implementation based on requests and BeautifulSoup."""
 
@@ -42,7 +57,9 @@ class RequestsSoupScraper(Scraper):
     def collect_for_date(self, portal: Portal, target_date: date) -> List[Article]:
         listing_url = portal.listing_url_for(datetime.combine(target_date, datetime.min.time()))
         self._log.info("GET %s", listing_url)
-        response = self._session.get(listing_url, headers=portal.headers)
+        response = self._session.get(
+            listing_url, headers=self._build_headers(portal, {"Referer": portal.base_url})
+        )
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -70,7 +87,12 @@ class RequestsSoupScraper(Scraper):
                     )
             self._log.debug("GET artigo %s", url)
             try:
-                article_response = self._session.get(url, headers=portal.headers)
+                article_response = self._session.get(
+                    url,
+                    headers=self._build_headers(
+                        portal, {"Referer": listing_url}
+                    ),
+                )
                 article_response.raise_for_status()
                 article_soup = BeautifulSoup(article_response.text, "html.parser")
             except Exception as exc:
@@ -129,7 +151,10 @@ class RequestsSoupScraper(Scraper):
             path = portal.listing_path_template.format(page=page)
             listing_url = f"{portal.base_url.rstrip('/')}/{path.lstrip('/')}"
             self._log.info("page %d: GET %s", page, listing_url)
-            response = self._session.get(listing_url, headers=portal.headers)
+            response = self._session.get(
+                listing_url,
+                headers=self._build_headers(portal, {"Referer": portal.base_url}),
+            )
             if response.status_code == 404:
                 self._log.info("page %d: 404, encerrando paginação", page)
                 break
@@ -164,7 +189,13 @@ class RequestsSoupScraper(Scraper):
                         )
                 self._log.debug("GET artigo %s", url)
                 try:
-                    article_response = self._session.get(url, headers=portal.headers)
+                    article_response = self._session.get(
+                        url,
+                        headers=self._build_headers(
+                            portal,
+                            {"Referer": listing_url},
+                        ),
+                    )
                     article_response.raise_for_status()
                     article_soup = BeautifulSoup(article_response.text, "html.parser")
                 except Exception as exc:
@@ -207,6 +238,24 @@ class RequestsSoupScraper(Scraper):
             pages_processed += 1
 
         return articles
+
+    def _build_headers(
+        self, portal: Portal, extra: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        """Combina cabeçalhos padrão com os específicos do portal.
+
+        Os portais podem exigir cabeçalhos semelhantes aos de navegadores reais
+        para liberar o conteúdo completo. Esta função garante que sempre
+        enviamos um conjunto robusto de cabeçalhos, permitindo que valores
+        fornecidos pelo portal prevaleçam quando necessário.
+        """
+
+        headers: dict[str, str] = dict(_DEFAULT_HEADERS)
+        if portal.headers:
+            headers.update(portal.headers)
+        if extra:
+            headers.update({k: v for k, v in extra.items() if v})
+        return headers
 
     def _extract_url(self, element, portal: Portal) -> str:
         raw_url = self._extract_value(element, portal.selectors.listing_url)
