@@ -172,9 +172,13 @@ Argumentos:
 | `--start-page` | Inteiro | Não (padrão `1`) | Página inicial. |
 | `--max-pages` | Inteiro | Não | Limite máximo de páginas a processar; varre tudo quando omitido. |
 | `--min-date` | Data (`YYYY-MM-DD`) | Não | Ignora artigos mais antigos do que a data informada. |
+| `--dump-first-page-html` | Flag | Não | Salva o HTML bruto da primeira página de listagem para auditoria. |
+| `--dump-first-page-html-path` | Caminho | Não | Define onde salvar o HTML; o padrão é `./audits/<portal>_pagina1_<timestamp>.html`. |
 | `--log-level` | String | Não | Sobrescreve o nível de log na chamada. |
 
 Ao terminar, informa o número de novas notícias coletadas e os limites utilizados. Pode falhar se o portal não existir, se o formato de data estiver incorreto ou se não houver acesso às páginas do portal.
+
+> **Dica:** o diretório de destino é criado automaticamente quando `--dump-first-page-html` é informado. Se apenas `--dump-first-page-html-path` for passado sem a flag principal, nenhum arquivo é gerado.
 
 ### collect-portal
 
@@ -189,6 +193,8 @@ Argumentos:
 | Nome | Tipo | Obrigatório | Descrição |
 | --- | --- | --- | --- |
 | `portal` | String | Sim | Nome do portal cadastrado. |
+| `--dump-first-page-html` | Flag | Não | Salva o HTML bruto da primeira página de listagem para auditoria. |
+| `--dump-first-page-html-path` | Caminho | Não | Define onde salvar o HTML; o padrão é `./audits/<portal>_pagina1_<timestamp>.html`. |
 | `--log-level` | String | Não | Ajusta o nível de log da execução atual. |
 
 Esse comando é ideal para o primeiro carregamento de um portal recém-cadastrado, pois elimina a necessidade de informar paginação manualmente (`collect-all`) ou datas específicas (`collect`). Ele reutiliza os seletores configurados para seguir os links de listagem até que as páginas deixem de retornar novos artigos. Ao final, informa quantas notícias foram incorporadas ao banco.

@@ -114,3 +114,31 @@ def test_collect_all_uses_first_page_fallback(portal: Portal) -> None:
     assert articles[0].content.strip().startswith("Conteúdo")
     assert articles[0].published_at.date() == datetime(2024, 6, 1).date()
 
+
+def test_collect_all_dumps_first_page_html(tmp_path, portal: Portal) -> None:
+    listing_response = _DummyResponse(
+        "https://example.com/page/1", _build_html_listing(with_items=True)
+    )
+    article_response = _DummyResponse("https://example.com/post-1", _build_html_article())
+
+    session = _DummySession(
+        {
+            "https://example.com": listing_response,
+            "https://example.com/page/1": listing_response,
+            "https://example.com/post-1": article_response,
+        }
+    )
+
+    scraper = RequestsSoupScraper(session=session)
+    output_path = tmp_path / "primeira_pagina.html"
+
+    scraper.collect_all(
+        portal,
+        max_pages=1,
+        first_page_html_path=output_path,
+    )
+
+    assert output_path.exists()
+    content = output_path.read_text(encoding="utf-8")
+    assert "post type-post" in content
+

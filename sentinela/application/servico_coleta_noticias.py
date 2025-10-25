@@ -1,11 +1,12 @@
 """Serviço de orquestração da coleta de notícias."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta
-from typing import Callable, Iterable, List
 import logging
 import time
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Callable, Iterable, List
 
 from sentinela.domain import Article
 from sentinela.domain.ports import ArticleSink, PortalGateway
@@ -100,6 +101,7 @@ class NewsCollectorService:
         status_publisher: Callable[[str], None] | None = None,
         *,
         keep_articles: bool = True,
+        first_page_html_path: Path | None = None,
     ) -> CollectionResult:
         """Coleta notícias para um portal em um intervalo de datas.
 
@@ -207,6 +209,7 @@ class NewsCollectorService:
         min_published_date: date | None = None,
         *,
         keep_articles: bool = True,
+        first_page_html_path: Path | None = None,
     ) -> CollectionResult:
         """Coleta notícias paginadas até atingir os limites informados.
 
@@ -219,6 +222,8 @@ class NewsCollectorService:
             keep_articles: Indica se os artigos aceitos devem ser mantidos na
                 memória até o final da execução. Utilize ``False`` quando
                 apenas os contadores forem necessários.
+            first_page_html_path: Quando informado, salva o HTML bruto da
+                primeira página analisada no caminho indicado.
 
         Returns:
             Um ``CollectionResult`` com o total de novos artigos e, quando
@@ -240,6 +245,7 @@ class NewsCollectorService:
         page = max(1, start_page)
         pages_processed = 0
         saved_urls: set[str] = set()
+        first_page_dump_reported = False
 
         def status(msg: str) -> None:
             log.info(msg)
@@ -259,7 +265,12 @@ class NewsCollectorService:
             current_page = page
             start_ts = time.perf_counter()
             collected = self._scraper.collect_all(
-                portal, start_page=current_page, max_pages=1
+                portal,
+                start_page=current_page,
+                max_pages=1,
+                first_page_html_path=(
+                    first_page_html_path if pages_processed == 0 else None
+                ),
             )
             elapsed = time.perf_counter() - start_ts
             if not collected:
@@ -267,6 +278,18 @@ class NewsCollectorService:
                     f"Portal '{portal_name}': página {current_page} sem itens, encerrando."
                 )
                 break
+
+            if (
+                first_page_html_path
+                and not first_page_dump_reported
+                and first_page_html_path.exists()
+            ):
+                status(
+                    "Portal '{portal}': HTML da primeira página salvo em {path}".format(
+                        portal=portal_name, path=first_page_html_path
+                    )
+                )
+                first_page_dump_reported = True
 
             page_seen_raw = len(collected)
             total_seen += page_seen_raw
