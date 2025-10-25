@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import logging
+import re
 import string
 from typing import List
 from urllib.parse import urljoin
@@ -290,6 +291,45 @@ class RequestsSoupScraper(Scraper):
         return "".join(result)
 
     def _parse_datetime(self, value: str, date_format: str) -> datetime:
+        normalized_value = value.strip()
+
+        iso_candidate = self._try_parse_isoformat(normalized_value)
+        if iso_candidate is not None:
+            return iso_candidate
+
+        br_candidate = self._try_parse_br_datetime(normalized_value)
+        if br_candidate is not None:
+            return br_candidate
+
+        if self._looks_like_regex(date_format):
+            pattern = re.compile(date_format)
+            match = pattern.search(normalized_value)
+            if not match:
+                raise ValueError(
+                    f"valor '{value}' não corresponde ao padrão de data '{date_format}'"
+                )
+            groups: list[str] = []
+            group_dict = match.groupdict()
+            for key in ("published", "date", "datetime"):
+                extracted = group_dict.get(key)
+                if extracted:
+                    groups.append(extracted)
+            for extracted in group_dict.values():
+                if extracted:
+                    groups.append(extracted)
+            groups.extend(group for group in match.groups() if group)
+            for candidate in groups:
+                candidate = candidate.strip()
+                parsed = self._try_parse_isoformat(candidate)
+                if parsed is not None:
+                    return parsed
+                parsed = self._try_parse_br_datetime(candidate)
+                if parsed is not None:
+                    return parsed
+            raise ValueError(
+                f"não foi possível interpretar data '{value}' usando o padrão '{date_format}'"
+            )
+
         # Handle month names in Portuguese when using %B without relying on OS locale
         if "%B" in date_format:
             months = {
@@ -307,7 +347,7 @@ class RequestsSoupScraper(Scraper):
                 "novembro": "11",
                 "dezembro": "12",
             }
-            normalized_value = value.strip().lower()
+            normalized_value = normalized_value.lower()
             for name, num in months.items():
                 if name in normalized_value:
                     normalized_value = normalized_value.replace(name, num)
@@ -316,7 +356,50 @@ class RequestsSoupScraper(Scraper):
             numeric_format = date_format.replace("%B", "%m")
             normalized_format = self._normalize_format_literals(numeric_format)
             return datetime.strptime(normalized_value, normalized_format)
-        return datetime.strptime(value, date_format)
+        return datetime.strptime(normalized_value, date_format)
+
+    def _try_parse_isoformat(self, value: str) -> datetime | None:
+        candidate = value
+        if candidate.endswith("Z"):
+            candidate = candidate[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+        if parsed.tzinfo:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+
+    def _try_parse_br_datetime(self, value: str) -> datetime | None:
+        date_match = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", value)
+        if not date_match:
+            return None
+        day, month, year = map(int, date_match.groups())
+
+        time_match = re.search(r"(\d{1,2})[:h](\d{2})(?:[:h](\d{2}))?", value)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2))
+            second = int(time_match.group(3) or 0)
+        else:
+            hour = minute = second = 0
+
+        try:
+            return datetime(year, month, day, hour, minute, second)
+        except ValueError:
+            return None
+
+    def _looks_like_regex(self, date_format: str) -> bool:
+        return bool(
+            date_format
+            and "%" not in date_format
+            and (
+                "(?" in date_format
+                or "\\d" in date_format
+                or "[" in date_format
+                or ")" in date_format
+            )
+        )
 
     def _normalize_format_literals(self, format_str: str) -> str:
         """Lowercase literal fragments of a strptime format string."""
