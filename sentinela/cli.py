@@ -181,13 +181,15 @@ def main() -> None:
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date) if args.end_date else start_date
         try:
-            articles = news_container.collector_service.collect(
-                args.portal, start_date, end_date
+            result = news_container.collector_service.collect(
+                args.portal, start_date, end_date, keep_articles=False
             )
         except (ValueError, RuntimeError) as exc:
             print(str(exc))
             return
-        print(f"{len(articles)} novas notícias coletadas para '{args.portal}'.")
+        print(
+            f"{result.total_new} novas notícias coletadas para '{args.portal}'."
+        )
     elif args.command == "list-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
@@ -208,29 +210,31 @@ def main() -> None:
     elif args.command == "collect-all":
         min_date = _parse_date(args.min_date) if args.min_date else None
         try:
-            new_articles = news_container.collector_service.collect_all_for_portal(
+            result = news_container.collector_service.collect_all_for_portal(
                 args.portal,
                 start_page=args.start_page,
                 max_pages=args.max_pages,
                 min_published_date=min_date,
+                keep_articles=False,
             )
         except (ValueError, RuntimeError) as exc:
             print(str(exc))
             return
         print(
-            f"{len(new_articles)} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
+            f"{result.total_new} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
         )
     elif args.command == "collect-portal":
         try:
-            new_articles = news_container.collector_service.collect_all_for_portal(
-                args.portal
+            result = news_container.collector_service.collect_all_for_portal(
+                args.portal,
+                keep_articles=False,
             )
         except (ValueError, RuntimeError) as exc:
             print(str(exc))
             return
         print(
             "{total} novas notícias coletadas em '{portal}' varrendo todas as páginas."
-            .format(total=len(new_articles), portal=args.portal)
+            .format(total=result.total_new, portal=args.portal)
         )
     elif args.command == "report-articles":
         start_date = _parse_date(args.start_date)
