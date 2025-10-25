@@ -8,7 +8,7 @@ import logging
 import re
 import string
 from typing import List
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -160,19 +160,19 @@ class RequestsSoupScraper(Scraper):
                 break
 
             self._prepare_portal_session(portal)
-            path = portal.listing_path_template.format(page=page)
-            listing_url = f"{portal.base_url.rstrip('/')}/{path.lstrip('/')}"
+            listing_url = self._build_listing_url(portal, page)
             self._log.info("page %d: GET %s", page, listing_url)
-            response = self._session.get(
-                listing_url,
-                headers=self._build_headers(portal, {"Referer": portal.base_url}),
+            soup, response = self._fetch_listing_soup(
+                portal, listing_url, referer=portal.base_url
             )
             if response.status_code == 404:
                 self._log.info("page %d: 404, encerrando paginação", page)
                 break
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
             elements = soup.select(portal.selectors.listing_article.query)
+            if not elements and page == 1:
+                fallback = self._try_first_page_fallback(portal, listing_url)
+                if fallback is not None:
+                    listing_url, soup, elements = fallback
             if not elements:
                 self._log.info("page %d: 0 itens, encerrando paginação", page)
                 break
@@ -251,6 +251,11 @@ class RequestsSoupScraper(Scraper):
 
         return articles
 
+    def _build_listing_url(self, portal: Portal, page: int) -> str:
+        path = portal.listing_path_template.format(page=page)
+        base = portal.base_url.rstrip("/")
+        return f"{base}/{path.lstrip('/')}"
+
     def _build_headers(
         self, portal: Portal, extra: dict[str, str] | None = None
     ) -> dict[str, str]:
@@ -291,6 +296,139 @@ class RequestsSoupScraper(Scraper):
             self._log.debug("warmup falhou para %s: %s", portal.base_url, exc)
         finally:
             self._prepared_portals.add(portal.name)
+
+    def _fetch_listing_soup(
+        self, portal: Portal, url: str, *, referer: str
+    ) -> tuple[BeautifulSoup, requests.Response]:
+        response = self._session.get(
+            url,
+            headers=self._build_headers(portal, {"Referer": referer}),
+        )
+        if response.status_code != 404:
+            response.raise_for_status()
+        return BeautifulSoup(response.text, "html.parser"), response
+
+    def _try_first_page_fallback(
+        self, portal: Portal, original_url: str
+    ) -> tuple[str, BeautifulSoup, list] | None:
+        """Tenta alternativas para a primeira página quando ela vem vazia."""
+
+        candidates = self._first_page_fallback_urls(portal, original_url)
+        for candidate in candidates:
+            try:
+                soup, response = self._fetch_listing_soup(
+                    portal, candidate, referer=portal.base_url
+                )
+            except requests.HTTPError as exc:
+                self._log.debug(
+                    "fallback primeira página falhou em %s: %s", candidate, exc
+                )
+                continue
+            elements = soup.select(portal.selectors.listing_article.query)
+            if elements:
+                self._log.info(
+                    "page 1: fallback encontrou %d itens em %s",
+                    len(elements),
+                    response.url,
+                )
+                return response.url, soup, elements
+        return None
+
+    def _first_page_fallback_urls(
+        self, portal: Portal, original_url: str
+    ) -> list[str]:
+        """Gera URLs candidatas para a primeira página sem sufixo de paginação."""
+
+        split_url = urlsplit(original_url)
+        candidates: list[str] = []
+
+        # Remove parâmetros comuns de paginação na query string.
+        if split_url.query:
+            params = split_url.query.split("&")
+            pagination_keys = {"page", "paged", "pagina", "pag", "p"}
+            filtered = [
+                item
+                for item in params
+                if item.split("=", 1)[0] not in pagination_keys
+            ]
+            if filtered != params:
+                new_query = "&".join(p for p in filtered if p)
+                candidates.append(
+                    urlunsplit(
+                        (
+                            split_url.scheme,
+                            split_url.netloc,
+                            split_url.path,
+                            new_query,
+                            split_url.fragment,
+                        )
+                    )
+                )
+                if not new_query:
+                    candidates.append(
+                        urlunsplit(
+                            (
+                                split_url.scheme,
+                                split_url.netloc,
+                                split_url.path,
+                                "",
+                                split_url.fragment,
+                            )
+                        )
+                    )
+
+        path = split_url.path
+        suffixes = [
+            ("/1", ""),
+            ("-1", ""),
+            ("_1", ""),
+        ]
+        trailing_segments = ["/page", "/pagina", "/pag", "/p"]
+        for suffix, replacement in suffixes:
+            if path.endswith(suffix):
+                trimmed = path[: -len(suffix)] + replacement
+                candidates.append(
+                    urlunsplit(
+                        (
+                            split_url.scheme,
+                            split_url.netloc,
+                            trimmed or "/",
+                            split_url.query,
+                            split_url.fragment,
+                        )
+                    )
+                )
+                for segment in trailing_segments:
+                    if trimmed.endswith(segment):
+                        alt_path = trimmed[: -len(segment)] or "/"
+                        candidates.append(
+                            urlunsplit(
+                                (
+                                    split_url.scheme,
+                                    split_url.netloc,
+                                    alt_path,
+                                    split_url.query,
+                                    split_url.fragment,
+                                )
+                            )
+                        )
+
+        # Sempre considerar a URL base como último recurso.
+        candidates.append(portal.base_url)
+
+        normalized_original = original_url.rstrip("/")
+        unique: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            candidate = candidate or portal.base_url
+            normalized = candidate.rstrip("/")
+            if not normalized or normalized == normalized_original:
+                continue
+            if normalized not in seen:
+                seen.add(normalized)
+                unique.append(candidate)
+
+        return unique
 
     def _extract_url(self, element, portal: Portal) -> str:
         raw_url = self._extract_value(element, portal.selectors.listing_url)
