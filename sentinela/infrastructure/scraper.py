@@ -345,7 +345,15 @@ class RequestsSoupScraper(Scraper):
         return datetime.strptime(normalized_value, date_format)
 
     def _parse_datetime_with_regex(self, value: str, date_format: str) -> datetime:
-        pattern = re.compile(date_format)
+        try:
+            pattern = re.compile(date_format)
+        except re.error as exc:  # pragma: no cover - depende de configuração externa
+            raise ValueError(
+                "padrão de data inválido: {}. "
+                "Se estiver utilizando sequências com barra, lembre-se de duplicá-las, "
+                "por exemplo, '\\d{{2}}' em JSON ou formulários."
+                .format(exc)
+            ) from exc
         match = pattern.search(value)
         if not match:
             raise ValueError(
