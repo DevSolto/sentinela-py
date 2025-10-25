@@ -172,7 +172,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
 
         try:
             end_date = request.end_date or request.start_date
-            articles = container.collector_service.collect(
+            result = container.collector_service.collect(
                 request.portal, request.start_date, end_date
             )
         except ValueError as exc:
@@ -180,11 +180,11 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
 
         response = CollectResponse(
             portal=request.portal,
-            collected=len(articles),
-            articles=[map_article_response(article) for article in articles],
+            collected=result.total_new,
+            articles=[map_article_response(article) for article in result.articles],
         )
-        if articles:
-            notify_news_ready(articles)
+        if result.articles:
+            notify_news_ready(result.articles)
         return response
 
     @router.post("/extraction/ready")
@@ -216,7 +216,7 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
         async def run_collection() -> None:
             try:
                 end_date = payload.end_date or payload.start_date
-                articles = await loop.run_in_executor(
+                result = await loop.run_in_executor(
                     None,
                     lambda: container.collector_service.collect(
                         payload.portal,
@@ -227,8 +227,8 @@ def include_routes(app: FastAPI, container: NewsContainer, *, prefix: str = "") 
                 )
                 response = CollectResponse(
                     portal=payload.portal,
-                    collected=len(articles),
-                    articles=[map_article_response(article) for article in articles],
+                    collected=result.total_new,
+                    articles=[map_article_response(article) for article in result.articles],
                 )
                 push("summary", json.dumps(response.model_dump()))
             except ValueError as exc:

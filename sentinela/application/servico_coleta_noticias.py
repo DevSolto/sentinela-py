@@ -1,6 +1,7 @@
 """Serviço de orquestração da coleta de notícias."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, List
 import logging
@@ -10,6 +11,16 @@ from sentinela.domain import Article
 from sentinela.domain.ports import ArticleSink, PortalGateway
 from sentinela.domain.repositories import ArticleReadRepository
 from sentinela.infrastructure.scraper import Scraper
+
+@dataclass(slots=True)
+class CollectionResult:
+    """Resumo de uma execução de coleta de notícias."""
+
+    total_new: int
+    articles: List[Article]
+
+    def __len__(self) -> int:  # pragma: no cover - compatibilidade com ``len``
+        return self.total_new
 
 
 class NewsCollectorService:
@@ -87,7 +98,9 @@ class NewsCollectorService:
         start_date: date,
         end_date: date,
         status_publisher: Callable[[str], None] | None = None,
-    ) -> List[Article]:
+        *,
+        keep_articles: bool = True,
+    ) -> CollectionResult:
         """Coleta notícias para um portal em um intervalo de datas.
 
         Args:
@@ -96,9 +109,14 @@ class NewsCollectorService:
             end_date: Data final (inclusiva) utilizada para coleta diária.
             status_publisher: Callback opcional para mensagens de progresso
                 específicas desta execução.
+            keep_articles: Quando ``True`` (padrão), mantém os artigos aceitos
+                em memória para retorno. Quando ``False``, apenas o total é
+                contabilizado, liberando as instâncias confirmadas logo após a
+                persistência.
 
         Returns:
-            Lista de ``Article`` novos que foram persistidos com sucesso.
+            Um ``CollectionResult`` com o total de artigos novos e, opcionalmente,
+            a lista com as notícias retornadas pelo sink.
 
         Raises:
             ValueError: Quando o portal não existe ou quando ``start_date`` é
@@ -118,6 +136,7 @@ class NewsCollectorService:
         )
 
         collected: List[Article] = []
+        total_new = 0
         current = start_date
         seen_urls: set[str] = set()
         # Percorre todas as datas do intervalo executando a raspagem diária.
@@ -126,26 +145,35 @@ class NewsCollectorService:
                 f"Buscando artigos de {current.isoformat()}", status_publisher
             )
             day_articles = self._scraper.collect_for_date(portal, current)
+            day_total = len(day_articles)
             # Remove URLs repetidas para evitar gravações duplicadas.
             unique_articles = [
                 article for article in day_articles if article.url not in seen_urls
             ]
             for article in unique_articles:
                 seen_urls.add(article.url)
-            stored_articles = list(self._article_sink.publish_many(unique_articles))
-            if stored_articles:
-                collected.extend(stored_articles)
+            stored_articles_count = 0
+            stored_articles_buffer: List[Article] | None = [] if keep_articles else None
+            for stored_article in self._article_sink.publish_many(unique_articles):
+                stored_articles_count += 1
+                if stored_articles_buffer is not None:
+                    stored_articles_buffer.append(stored_article)
+            if stored_articles_buffer:
+                collected.extend(stored_articles_buffer)
+            total_new += stored_articles_count
+            unique_articles.clear()
+            day_articles.clear()
             self._publish_status(
-                f"{current.isoformat()}: encontrados {len(day_articles)} artigos, "
-                f"novos salvos {len(stored_articles)}",
+                f"{current.isoformat()}: encontrados {day_total} artigos, "
+                f"novos salvos {stored_articles_count}",
                 status_publisher,
             )
             current += timedelta(days=1)
         self._publish_status(
-            f"Coleta finalizada para '{portal_name}'. Total de novos artigos: {len(collected)}",
+            f"Coleta finalizada para '{portal_name}'. Total de novos artigos: {total_new}",
             status_publisher,
         )
-        return collected
+        return CollectionResult(total_new=total_new, articles=collected)
 
     def list_articles(
         self, portal_name: str, start_date: date, end_date: date
@@ -177,7 +205,9 @@ class NewsCollectorService:
         start_page: int = 1,
         max_pages: int | None = None,
         min_published_date: date | None = None,
-    ) -> List[Article]:
+        *,
+        keep_articles: bool = True,
+    ) -> CollectionResult:
         """Coleta notícias paginadas até atingir os limites informados.
 
         Args:
@@ -186,9 +216,13 @@ class NewsCollectorService:
             max_pages: Limite opcional de páginas a processar.
             min_published_date: Data mínima opcional para considerar novos
                 artigos; itens mais antigos encerram a coleta.
+            keep_articles: Indica se os artigos aceitos devem ser mantidos na
+                memória até o final da execução. Utilize ``False`` quando
+                apenas os contadores forem necessários.
 
         Returns:
-            Lista de ``Article`` novos persistidos durante a execução.
+            Um ``CollectionResult`` com o total de novos artigos e, quando
+            solicitado, a lista dos itens confirmados pelo sink.
 
         Raises:
             ValueError: Quando o portal solicitado não está cadastrado.
@@ -237,7 +271,6 @@ class NewsCollectorService:
             page_seen_raw = len(collected)
             total_seen += page_seen_raw
             # Filtra duplicados existentes no banco e duplicados dentro do mesmo run.
-            new_articles: List[Article] = []
             page_skipped_in_run = 0
             page_skipped_existing_db = 0
             page_skipped_by_date = 0
@@ -260,18 +293,23 @@ class NewsCollectorService:
                     continue
                 batch.append(a)
                 saved_urls.add(a.url)
-            stored_articles = list(self._article_sink.publish_many(batch))
-            page_skipped_existing_db = len(batch) - len(stored_articles)
-            page_new_articles = stored_articles
+            stored_articles_count = 0
+            stored_articles_buffer: List[Article] | None = [] if keep_articles else None
+            for stored_article in self._article_sink.publish_many(batch):
+                stored_articles_count += 1
+                if stored_articles_buffer is not None:
+                    stored_articles_buffer.append(stored_article)
+            page_skipped_existing_db = len(batch) - stored_articles_count
             page_seen_considered = len(batch)
             total_skipped_in_run += page_skipped_in_run
             total_skipped_existing_db += page_skipped_existing_db
             total_skipped_by_date += page_skipped_by_date
 
             # Salva incrementalmente conforme novas notícias são confirmadas.
-            if page_new_articles:
-                total_new += len(page_new_articles)
-                all_new.extend(page_new_articles)
+            total_new += stored_articles_count
+            if keep_articles and stored_articles_buffer:
+                all_new.extend(stored_articles_buffer)
+            batch.clear()
 
             status(
                 "Página {page}: itens {page_seen_raw}, considerados {page_seen_considered}, novos {len_new}, "
@@ -282,7 +320,7 @@ class NewsCollectorService:
                     page=current_page,
                     page_seen_raw=page_seen_raw,
                     page_seen_considered=page_seen_considered,
-                    len_new=len(page_new_articles),
+                    len_new=stored_articles_count,
                     skip_run=page_skipped_in_run,
                     skip_db=page_skipped_existing_db,
                     skip_date=page_skipped_by_date,
@@ -294,6 +332,7 @@ class NewsCollectorService:
                     total_skip_date=total_skipped_by_date,
                 )
             )
+            collected.clear()
 
             page += 1
             pages_processed += 1
@@ -320,7 +359,8 @@ class NewsCollectorService:
                 skip_date=total_skipped_by_date,
             )
         )
-        return all_new
+        saved_urls.clear()
+        return CollectionResult(total_new=total_new, articles=all_new)
 
 
-__all__ = ["NewsCollectorService"]
+__all__ = ["CollectionResult", "NewsCollectorService"]
