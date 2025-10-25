@@ -46,10 +46,12 @@ Após a instalação, o utilitário de linha de comando `sentinela-cli` fica dis
 | `list-portals` | Lista portais cadastrados. | — |
 | `collect <portal> <data_inicial> [data_final]` | Coleta notícias em um intervalo de datas. | Datas no formato `YYYY-MM-DD`; `data_final` é opcional e assume `data_inicial` quando ausente. |
 | `list-articles <portal> <data_inicial> <data_final>` | Lista artigos coletados previamente. | Datas obrigatórias no formato `YYYY-MM-DD`. |
-| `collect-all <portal> [--start-page N] [--max-pages N] [--min-date AAAA-MM-DD]` | Percorre todas as páginas configuradas para um portal. | Flags opcionais controlam limites de paginação e data mínima. |
-| `collect-portal <portal>` | Varre automaticamente todas as páginas de listagem disponíveis até não encontrar novos artigos. | Indique apenas o nome do portal; útil ao cadastrar um portal novo e desejar coletar todo o histórico disponível. |
+| `collect-all <portal> [--start-page N] [--max-pages N] [--min-date AAAA-MM-DD] [--dump-first-page-html] [--dump-first-page-html-path CAMINHO]` | Percorre todas as páginas configuradas para um portal. | Flags opcionais controlam limites de paginação, data mínima e o salvamento do HTML da primeira listagem para auditoria. |
+| `collect-portal <portal> [--dump-first-page-html] [--dump-first-page-html-path CAMINHO]` | Varre automaticamente todas as páginas de listagem disponíveis até não encontrar novos artigos. | Útil ao cadastrar um portal novo e desejar coletar todo o histórico disponível; pode salvar o HTML da primeira listagem para inspeção. |
 
 Todos os comandos aceitam a flag `--log-level` (`DEBUG`, `INFO`, `WARNING`, `ERROR`) e respeitam a variável de ambiente `SENTINELA_LOG_LEVEL`, útil para padronizar o nível de log em pipelines de CI/CD. O formato padrão de saída é `%(asctime)s %(levelname)s %(name)s - %(message)s`, conforme configurado em `sentinela/cli.py`. Um trecho típico dos logs ao rodar `collect` é apresentado abaixo:
+
+Quando `--dump-first-page-html` é utilizado com `collect-all` ou `collect-portal`, o HTML bruto da primeira página de listagem é salvo para auditoria. Caso `--dump-first-page-html-path` não seja informado, o arquivo é criado automaticamente em `./audits/<portal>_pagina1_<timestamp>.html` (o diretório é gerado se ainda não existir).
 
 ```text
 2024-05-18 10:32:11 INFO sentinela.services.news.collector - Iniciando coleta para portal=NoticiasExemplo start=2024-05-01 end=2024-05-03

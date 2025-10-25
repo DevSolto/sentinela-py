@@ -65,6 +65,22 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Data mínima dos artigos no formato YYYY-MM-DD (inclusive)",
     )
+    collect_all.add_argument(
+        "--dump-first-page-html",
+        action="store_true",
+        help=(
+            "Quando informado, salva o HTML bruto da primeira página de listagem "
+            "em um arquivo para auditoria"
+        ),
+    )
+    collect_all.add_argument(
+        "--dump-first-page-html-path",
+        type=Path,
+        help=(
+            "Caminho do arquivo para salvar o HTML da primeira página. "
+            "Padrão: ./audits/<portal>_pagina1_<timestamp>.html"
+        ),
+    )
 
     collect_portal = subparsers.add_parser(
         "collect-portal",
@@ -73,6 +89,22 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     collect_portal.add_argument("portal", help="Nome do portal cadastrado")
+    collect_portal.add_argument(
+        "--dump-first-page-html",
+        action="store_true",
+        help=(
+            "Quando informado, salva o HTML bruto da primeira página de listagem "
+            "em um arquivo para auditoria"
+        ),
+    )
+    collect_portal.add_argument(
+        "--dump-first-page-html-path",
+        type=Path,
+        help=(
+            "Caminho do arquivo para salvar o HTML da primeira página. "
+            "Padrão: ./audits/<portal>_pagina1_<timestamp>.html"
+        ),
+    )
 
     report_articles = subparsers.add_parser(
         "report-articles",
@@ -210,12 +242,18 @@ def main() -> None:
     elif args.command == "collect-all":
         min_date = _parse_date(args.min_date) if args.min_date else None
         try:
+            dump_path = _prepare_first_page_dump_path(args, args.portal)
+        except RuntimeError as exc:
+            print(str(exc))
+            return
+        try:
             result = news_container.collector_service.collect_all_for_portal(
                 args.portal,
                 start_page=args.start_page,
                 max_pages=args.max_pages,
                 min_published_date=min_date,
                 keep_articles=False,
+                first_page_html_path=dump_path,
             )
         except (ValueError, RuntimeError) as exc:
             print(str(exc))
@@ -223,11 +261,19 @@ def main() -> None:
         print(
             f"{result.total_new} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
         )
+        if dump_path and dump_path.exists():
+            print(f"HTML da primeira página salvo em '{dump_path}'.")
     elif args.command == "collect-portal":
+        try:
+            dump_path = _prepare_first_page_dump_path(args, args.portal)
+        except RuntimeError as exc:
+            print(str(exc))
+            return
         try:
             result = news_container.collector_service.collect_all_for_portal(
                 args.portal,
                 keep_articles=False,
+                first_page_html_path=dump_path,
             )
         except (ValueError, RuntimeError) as exc:
             print(str(exc))
@@ -236,6 +282,8 @@ def main() -> None:
             "{total} novas notícias coletadas em '{portal}' varrendo todas as páginas."
             .format(total=result.total_new, portal=args.portal)
         )
+        if dump_path and dump_path.exists():
+            print(f"HTML da primeira página salvo em '{dump_path}'.")
     elif args.command == "report-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
@@ -331,6 +379,30 @@ def _parse_date(value: str) -> datetime.date:
         raise ValueError(
             "Datas devem estar no formato YYYY-MM-DD"
         ) from exc
+
+
+def _prepare_first_page_dump_path(args: argparse.Namespace, portal: str) -> Path | None:
+    if not getattr(args, "dump_first_page_html", False):
+        return None
+
+    raw_path: Path | None = getattr(args, "dump_first_page_html_path", None)
+    if raw_path:
+        path = raw_path
+    else:
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        path = Path("audits") / f"{portal}_pagina1_{timestamp}.html"
+
+    if not path.is_absolute():
+        path = Path.cwd() / path
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Não foi possível preparar diretório para salvar HTML da primeira página: {exc}"
+        ) from exc
+
+    return path
 
 
 def _load_portal_from_json(path: Path) -> Portal:
