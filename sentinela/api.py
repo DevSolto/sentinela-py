@@ -1,8 +1,6 @@
 """Ponto de entrada REST que agrega os serviços do Sentinela."""
 from __future__ import annotations
 
-import os
-
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -16,6 +14,7 @@ from sentinela.services.portals.api import (
 )
 from sentinela.services.publications import build_publications_container
 from sentinela.services.publications.api import include_routes as include_publications_routes
+from sentinela.settings import get_api_bind_host, get_api_port
 
 
 def create_app() -> FastAPI:
@@ -46,8 +45,8 @@ def run() -> None:
     load_dotenv()
     uvicorn.run(
         "sentinela.api:create_app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000")),
+        host=get_api_bind_host(),
+        port=get_api_port(),
         factory=True,
     )
 

@@ -92,6 +92,8 @@ sentinela-api
 
 O serviço utiliza o FastAPI e fica disponível por padrão em `http://127.0.0.1:8000`. A documentação interativa pode ser acessada em `http://127.0.0.1:8000/docs`.
 
+Para alterar a porta padrão basta definir `SENTINELA_API_PORT` (ou `PORT`) no arquivo `.env`. O valor será utilizado automaticamente pelos serviços internos e pelos clientes que dependem da URL local.
+
 ### Cadastro de portal (`POST /portals`)
 
 Envie o corpo JSON com a configuração do portal:
