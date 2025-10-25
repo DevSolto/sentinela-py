@@ -40,3 +40,14 @@ def test_parse_datetime_handles_brazilian_format_with_literal_text():
     )
 
     assert parsed == datetime(2025, 10, 24, 21, 15)
+
+
+def test_parse_datetime_prefers_regex_after_whitespace_normalization():
+    scraper = RequestsSoupScraper()
+
+    parsed = scraper._parse_datetime(
+        "Atualizado em 24/10/2025 às 18h29 •\xa0Publicado\xa0em\xa024/10/2025 às 18h26",
+        date_format=r"Publicado em (?P<published>\d{2}/\d{2}/\d{4} às \d{2}h\d{2})",
+    )
+
+    assert parsed == datetime(2025, 10, 24, 18, 26)

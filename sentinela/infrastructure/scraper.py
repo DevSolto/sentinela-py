@@ -17,6 +17,9 @@ from soupsieve import SelectorSyntaxError
 from sentinela.domain import Article, Portal, Selector
 
 
+_COLLAPSE_WHITESPACE_RE = re.compile(r"\s+", re.UNICODE)
+
+
 class Scraper(ABC):
     """Defines the contract for collecting articles from a portal."""
 
@@ -291,44 +294,27 @@ class RequestsSoupScraper(Scraper):
         return "".join(result)
 
     def _parse_datetime(self, value: str, date_format: str) -> datetime:
-        normalized_value = value.strip()
+        normalized_value = self._normalize_datetime_value(value)
 
         iso_candidate = self._try_parse_isoformat(normalized_value)
         if iso_candidate is not None:
             return iso_candidate
 
+        regex_error: ValueError | None = None
+        if self._looks_like_regex(date_format):
+            try:
+                return self._parse_datetime_with_regex(
+                    normalized_value, date_format
+                )
+            except ValueError as exc:
+                regex_error = exc
+
         br_candidate = self._try_parse_br_datetime(normalized_value)
         if br_candidate is not None:
             return br_candidate
 
-        if self._looks_like_regex(date_format):
-            pattern = re.compile(date_format)
-            match = pattern.search(normalized_value)
-            if not match:
-                raise ValueError(
-                    f"valor '{value}' não corresponde ao padrão de data '{date_format}'"
-                )
-            groups: list[str] = []
-            group_dict = match.groupdict()
-            for key in ("published", "date", "datetime"):
-                extracted = group_dict.get(key)
-                if extracted:
-                    groups.append(extracted)
-            for extracted in group_dict.values():
-                if extracted:
-                    groups.append(extracted)
-            groups.extend(group for group in match.groups() if group)
-            for candidate in groups:
-                candidate = candidate.strip()
-                parsed = self._try_parse_isoformat(candidate)
-                if parsed is not None:
-                    return parsed
-                parsed = self._try_parse_br_datetime(candidate)
-                if parsed is not None:
-                    return parsed
-            raise ValueError(
-                f"não foi possível interpretar data '{value}' usando o padrão '{date_format}'"
-            )
+        if regex_error is not None:
+            raise regex_error
 
         # Handle month names in Portuguese when using %B without relying on OS locale
         if "%B" in date_format:
@@ -357,6 +343,35 @@ class RequestsSoupScraper(Scraper):
             normalized_format = self._normalize_format_literals(numeric_format)
             return datetime.strptime(normalized_value, normalized_format)
         return datetime.strptime(normalized_value, date_format)
+
+    def _parse_datetime_with_regex(self, value: str, date_format: str) -> datetime:
+        pattern = re.compile(date_format)
+        match = pattern.search(value)
+        if not match:
+            raise ValueError(
+                f"valor '{value}' não corresponde ao padrão de data '{date_format}'"
+            )
+        groups: list[str] = []
+        group_dict = match.groupdict()
+        for key in ("published", "date", "datetime"):
+            extracted = group_dict.get(key)
+            if extracted:
+                groups.append(extracted)
+        for extracted in group_dict.values():
+            if extracted:
+                groups.append(extracted)
+        groups.extend(group for group in match.groups() if group)
+        for candidate in groups:
+            normalized_candidate = self._normalize_datetime_value(candidate)
+            parsed = self._try_parse_isoformat(normalized_candidate)
+            if parsed is not None:
+                return parsed
+            parsed = self._try_parse_br_datetime(normalized_candidate)
+            if parsed is not None:
+                return parsed
+        raise ValueError(
+            f"não foi possível interpretar data '{value}' usando o padrão '{date_format}'"
+        )
 
     def _try_parse_isoformat(self, value: str) -> datetime | None:
         candidate = value
@@ -428,3 +443,8 @@ class RequestsSoupScraper(Scraper):
                     i += 1
                 result.append(format_str[start:i].lower())
         return "".join(result)
+
+    def _normalize_datetime_value(self, value: str) -> str:
+        sanitized = value.replace("\xa0", " ").replace("\u202f", " ")
+        sanitized = _COLLAPSE_WHITESPACE_RE.sub(" ", sanitized)
+        return sanitized.strip()
