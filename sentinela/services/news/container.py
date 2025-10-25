@@ -11,6 +11,7 @@ from sentinela.services.news.clients import (
     PortalServiceClient,
     PublicationsAPISink,
 )
+from sentinela.settings import get_api_base_url
 
 
 @dataclass
@@ -31,8 +32,11 @@ def build_news_container(
 ) -> NewsContainer:
     """Build the news collection service container."""
 
-    portals_url = portals_url or os.getenv(
-        "PORTALS_SERVICE_URL", "http://127.0.0.1:8000"
+    default_portals_url = get_api_base_url()
+    portals_url = (
+        portals_url
+        or os.getenv("PORTALS_SERVICE_URL")
+        or default_portals_url
     )
     publications_url = publications_url or os.getenv(
         "PUBLICATIONS_SERVICE_URL", "http://localhost:8002"
