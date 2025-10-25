@@ -52,7 +52,14 @@ class PublicationsAPISink(ArticleSink):
         payload = [self._article_to_payload(article) for article in articles]
         if not payload:
             return []
-        response = self._client.post("/articles/batch", json={"articles": payload})
+        try:
+            response = self._client.post("/articles/batch", json={"articles": payload})
+        except httpx.RequestError as exc:  # pragma: no cover - network failure path
+            raise RuntimeError(
+                "Não foi possível conectar ao serviço de publicações. "
+                "Verifique se a API está em execução ou ajuste a variável "
+                "PUBLICATIONS_SERVICE_URL."
+            ) from exc
         response.raise_for_status()
         body = response.json()
         stored = body.get("stored", [])
