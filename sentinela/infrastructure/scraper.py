@@ -32,17 +32,45 @@ class Scraper(ABC):
         raise NotImplementedError
 
 
+_DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"  # padrão navegador
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"  # imagens comuns
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Pragma": "no-cache",
+    "Cache-Control": "no-cache",
+}
+
+
 class RequestsSoupScraper(Scraper):
     """Scraper implementation based on requests and BeautifulSoup."""
 
     def __init__(self, session: requests.Session | None = None) -> None:
         self._session = session or requests.Session()
         self._log = logging.getLogger("sentinela.scraper")
+        self._prepared_portals: set[str] = set()
 
     def collect_for_date(self, portal: Portal, target_date: date) -> List[Article]:
+        self._prepare_portal_session(portal)
         listing_url = portal.listing_url_for(datetime.combine(target_date, datetime.min.time()))
         self._log.info("GET %s", listing_url)
-        response = self._session.get(listing_url, headers=portal.headers)
+        response = self._session.get(
+            listing_url, headers=self._build_headers(portal, {"Referer": portal.base_url})
+        )
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -70,7 +98,12 @@ class RequestsSoupScraper(Scraper):
                     )
             self._log.debug("GET artigo %s", url)
             try:
-                article_response = self._session.get(url, headers=portal.headers)
+                article_response = self._session.get(
+                    url,
+                    headers=self._build_headers(
+                        portal, {"Referer": listing_url}
+                    ),
+                )
                 article_response.raise_for_status()
                 article_soup = BeautifulSoup(article_response.text, "html.parser")
             except Exception as exc:
@@ -126,10 +159,14 @@ class RequestsSoupScraper(Scraper):
             if max_pages is not None and pages_processed >= max_pages:
                 break
 
+            self._prepare_portal_session(portal)
             path = portal.listing_path_template.format(page=page)
             listing_url = f"{portal.base_url.rstrip('/')}/{path.lstrip('/')}"
             self._log.info("page %d: GET %s", page, listing_url)
-            response = self._session.get(listing_url, headers=portal.headers)
+            response = self._session.get(
+                listing_url,
+                headers=self._build_headers(portal, {"Referer": portal.base_url}),
+            )
             if response.status_code == 404:
                 self._log.info("page %d: 404, encerrando paginação", page)
                 break
@@ -164,7 +201,13 @@ class RequestsSoupScraper(Scraper):
                         )
                 self._log.debug("GET artigo %s", url)
                 try:
-                    article_response = self._session.get(url, headers=portal.headers)
+                    article_response = self._session.get(
+                        url,
+                        headers=self._build_headers(
+                            portal,
+                            {"Referer": listing_url},
+                        ),
+                    )
                     article_response.raise_for_status()
                     article_soup = BeautifulSoup(article_response.text, "html.parser")
                 except Exception as exc:
@@ -207,6 +250,47 @@ class RequestsSoupScraper(Scraper):
             pages_processed += 1
 
         return articles
+
+    def _build_headers(
+        self, portal: Portal, extra: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        """Combina cabeçalhos padrão com os específicos do portal.
+
+        Os portais podem exigir cabeçalhos semelhantes aos de navegadores reais
+        para liberar o conteúdo completo. Esta função garante que sempre
+        enviamos um conjunto robusto de cabeçalhos, permitindo que valores
+        fornecidos pelo portal prevaleçam quando necessário.
+        """
+
+        headers: dict[str, str] = dict(_DEFAULT_HEADERS)
+        if portal.headers:
+            headers.update(portal.headers)
+        if extra:
+            headers.update({k: v for k, v in extra.items() if v})
+        return headers
+
+    def _prepare_portal_session(self, portal: Portal) -> None:
+        """Realiza uma requisição inicial ao portal para obter cookies/sessão."""
+
+        if portal.name in self._prepared_portals:
+            return
+
+        try:
+            self._log.debug("warmup GET %s", portal.base_url)
+            response = self._session.get(
+                portal.base_url,
+                headers=self._build_headers(portal, {"Referer": portal.base_url}),
+                timeout=15,
+            )
+            # Mesmo em caso de 403, manteremos o fluxo; apenas registramos.
+            if response.status_code >= 400:
+                self._log.debug(
+                    "warmup %s retornou %s", portal.base_url, response.status_code
+                )
+        except Exception as exc:  # pragma: no cover - depende do portal
+            self._log.debug("warmup falhou para %s: %s", portal.base_url, exc)
+        finally:
+            self._prepared_portals.add(portal.name)
 
     def _extract_url(self, element, portal: Portal) -> str:
         raw_url = self._extract_value(element, portal.selectors.listing_url)
