@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 import logging
 import re
 import string
+from pathlib import Path
 from typing import List
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -28,7 +29,13 @@ class Scraper(ABC):
         """Collect all articles from the portal on the given date."""
 
     # Optional extended contract for portals paginated by page number
-    def collect_all(self, portal: Portal, start_page: int = 1, max_pages: int | None = None) -> List[Article]:
+    def collect_all(
+        self,
+        portal: Portal,
+        start_page: int = 1,
+        max_pages: int | None = None,
+        first_page_html_path: Path | None = None,
+    ) -> List[Article]:
         raise NotImplementedError
 
 
@@ -44,7 +51,10 @@ _DEFAULT_HEADERS = {
         "application/signed-exchange;v=b3;q=0.7"
     ),
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
+    # Mantemos apenas encodings que o ``requests`` consegue descompactar sem
+    # dependências extras (gzip/deflate). Caso contrário, o servidor pode
+    # responder com Brotli e produzir arquivos binários ao salvar o HTML.
+    "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
@@ -141,12 +151,18 @@ class RequestsSoupScraper(Scraper):
         return articles
 
     def collect_all(
-        self, portal: Portal, start_page: int = 1, max_pages: int | None = None
+        self,
+        portal: Portal,
+        start_page: int = 1,
+        max_pages: int | None = None,
+        first_page_html_path: Path | None = None,
     ) -> List[Article]:
         """Collect articles across paginated listing using {page} in template.
 
-        Stops when a page yields no articles or when max_pages is reached.
-        Requires portal.listing_has_full_articles=True to avoid per-article fetch.
+        Stops when a page yields no articles or when ``max_pages`` is reached.
+        Requires ``portal.listing_has_full_articles=True`` to avoid per-article
+        fetch. Quando ``first_page_html_path`` é informado, o HTML bruto da
+        primeira página é persistido para auditoria.
         """
         if "{page}" not in portal.listing_path_template:
             raise ValueError("listing_path_template must contain '{page}' for collect_all")
@@ -154,6 +170,8 @@ class RequestsSoupScraper(Scraper):
         articles: List[Article] = []
         page = max(1, start_page)
         pages_processed = 0
+
+        first_page_html_saved = False
 
         while True:
             if max_pages is not None and pages_processed >= max_pages:
@@ -165,6 +183,10 @@ class RequestsSoupScraper(Scraper):
             soup, response = self._fetch_listing_soup(
                 portal, listing_url, referer=portal.base_url
             )
+            if first_page_html_path and not first_page_html_saved:
+                first_page_html_saved = self._dump_first_page_html(
+                    first_page_html_path, response.text
+                )
             if response.status_code == 404:
                 self._log.info("page %d: 404, encerrando paginação", page)
                 break
@@ -172,7 +194,11 @@ class RequestsSoupScraper(Scraper):
             if not elements and page == 1:
                 fallback = self._try_first_page_fallback(portal, listing_url)
                 if fallback is not None:
-                    listing_url, soup, elements = fallback
+                    listing_url, html_text, soup, elements = fallback
+                    if first_page_html_path and not first_page_html_saved:
+                        first_page_html_saved = self._dump_first_page_html(
+                            first_page_html_path, html_text
+                        )
             if not elements:
                 self._log.info("page %d: 0 itens, encerrando paginação", page)
                 break
@@ -310,7 +336,7 @@ class RequestsSoupScraper(Scraper):
 
     def _try_first_page_fallback(
         self, portal: Portal, original_url: str
-    ) -> tuple[str, BeautifulSoup, list] | None:
+    ) -> tuple[str, str, BeautifulSoup, list] | None:
         """Tenta alternativas para a primeira página quando ela vem vazia."""
 
         candidates = self._first_page_fallback_urls(portal, original_url)
@@ -331,8 +357,20 @@ class RequestsSoupScraper(Scraper):
                     len(elements),
                     response.url,
                 )
-                return response.url, soup, elements
+                return response.url, response.text, soup, elements
         return None
+
+    def _dump_first_page_html(self, path: Path, html: str) -> bool:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(html, encoding="utf-8")
+            self._log.info("Primeira página salva em %s", path)
+            return True
+        except OSError as exc:
+            self._log.warning(
+                "Falha ao salvar HTML da primeira página em %s: %s", path, exc
+            )
+            return False
 
     def _first_page_fallback_urls(
         self, portal: Portal, original_url: str
