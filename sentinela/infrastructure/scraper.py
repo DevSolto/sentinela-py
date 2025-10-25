@@ -256,27 +256,36 @@ class RequestsSoupScraper(Scraper):
         return target.get_text(strip=True)
 
     def _normalize_selector_query(self, query: str) -> str:
-        """Adiciona colchetes faltantes em seletores de atributo."""
+        """Corrige seletores com colchetes e aspas ausentes."""
 
-        open_brackets = 0
-        in_single = False
-        in_double = False
         result: list[str] = []
+        bracket_balance = 0
+        quote_char: str | None = None
 
         for char in query:
-            result.append(char)
-            if char == "'" and not in_double:
-                in_single = not in_single
-            elif char == '"' and not in_single:
-                in_double = not in_double
-            elif not in_single and not in_double:
-                if char == "[":
-                    open_brackets += 1
-                elif char == "]" and open_brackets > 0:
-                    open_brackets -= 1
+            if char in ("'", '"'):
+                if quote_char is None:
+                    quote_char = char
+                elif quote_char == char:
+                    quote_char = None
 
-        if open_brackets:
-            result.append("]" * open_brackets)
+            if char == "[" and quote_char is None:
+                bracket_balance += 1
+            elif char == "]":
+                if quote_char is not None:
+                    # Fecha aspas antes de fechar o colchete.
+                    result.append(quote_char)
+                    quote_char = None
+                if bracket_balance > 0:
+                    bracket_balance -= 1
+
+            result.append(char)
+
+        if quote_char is not None:
+            result.append(quote_char)
+
+        if bracket_balance > 0:
+            result.extend("]" * bracket_balance)
 
         return "".join(result)
 
