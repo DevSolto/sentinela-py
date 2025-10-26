@@ -14,7 +14,8 @@ class RawMatch:
     candidate_id: str | None
     score: float
     method: str
-    signals: dict[str, Any] = field(default_factory=dict)
+    signals: Mapping[str, Any] = field(default_factory=dict)
+    confidence: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +24,9 @@ class GeoOutput:
 
     article_id: str
     matches: tuple[RawMatch, ...]
-    cities: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    primary_city: Mapping[str, Any] | None = None
+    mentioned_cities: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    disambiguation: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
