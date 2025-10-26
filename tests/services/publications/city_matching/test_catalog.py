@@ -71,11 +71,19 @@ def test_load_city_catalog_fetches_full_dataset_when_sample(monkeypatch, tmp_pat
     )
 
     assert calls == ["ibge"]
-    assert result["data"] == fetched_payload
+    assert {entry["ibge_id"] for entry in result["data"]} == {
+        city["ibge_id"] for city in fetched_payload
+    }
+    for entry in result["data"]:
+        assert entry["name"] in {city["name"] for city in fetched_payload}
+        assert "ibge_context" in entry
+        assert "coords" in entry
     assert result["metadata"]["record_count"] == len(fetched_payload)
 
     stored = json.loads(cache_path.read_text(encoding="utf-8"))
-    assert stored["data"] == fetched_payload
+    assert {entry["ibge_id"] for entry in stored["data"]} == {
+        city["ibge_id"] for city in fetched_payload
+    }
 
 
 def test_load_city_catalog_returns_original_when_fetch_fails(monkeypatch, tmp_path: Path) -> None:
@@ -140,9 +148,17 @@ def test_load_city_catalog_reads_from_storage_before_fetch(monkeypatch, tmp_path
     )
 
     assert storage.load_calls == ["test"]
-    assert result == storage_payload
+    assert {entry["ibge_id"] for entry in result["data"]} == {
+        "3550308",
+        "5208707",
+    }
+    for entry in result["data"]:
+        assert "ibge_context" in entry
     stored = json.loads(cache_path.read_text(encoding="utf-8"))
-    assert stored == storage_payload
+    assert {entry["ibge_id"] for entry in stored["data"]} == {
+        "3550308",
+        "5208707",
+    }
 
 
 def test_load_city_catalog_uses_storage_even_without_ensure(monkeypatch, tmp_path: Path) -> None:
@@ -163,9 +179,15 @@ def test_load_city_catalog_uses_storage_even_without_ensure(monkeypatch, tmp_pat
     result = catalog_module.load_city_catalog("test", storage=storage)
 
     assert storage.load_calls == ["test"]
-    assert result == storage_payload
+    assert {entry["ibge_id"] for entry in result["data"]} == {
+        "3550308",
+        "5208707",
+    }
     stored = json.loads(cache_path.read_text(encoding="utf-8"))
-    assert stored == storage_payload
+    assert {entry["ibge_id"] for entry in stored["data"]} == {
+        "3550308",
+        "5208707",
+    }
 
 
 def test_load_city_catalog_persists_refresh_into_storage(monkeypatch, tmp_path: Path) -> None:
@@ -192,5 +214,71 @@ def test_load_city_catalog_persists_refresh_into_storage(monkeypatch, tmp_path: 
     assert storage.saved
     version, payload = storage.saved[-1]
     assert version == "test"
-    assert payload["data"] == fetched_payload
-    assert result["data"] == fetched_payload
+    assert {entry["ibge_id"] for entry in payload["data"]} == {
+        city["ibge_id"] for city in fetched_payload
+    }
+    assert {entry["ibge_id"] for entry in result["data"]} == {
+        city["ibge_id"] for city in fetched_payload
+    }
+
+
+def test_load_city_catalog_enriches_geographic_context(monkeypatch, tmp_path: Path) -> None:
+    cache_path = tmp_path / "catalog.json"
+    payload = {
+        "metadata": {
+            "version": "test",
+            "record_count": 2,
+            "source": "fixture",
+            "primary_source": "fixture",
+            "checksum": "xyz",
+            "downloaded_at": "2024-01-01T00:00:00Z",
+        },
+        "data": [
+            {
+                "ibge_id": "1001",
+                "name": "Cidade X",
+                "uf": "AX",
+                "region": "Norte",
+                "state": "Estado X",
+                "intermediate_region": "Intermediária X",
+                "immediate_region": "Imediata X",
+                "mesoregion": "Mesorregião X",
+                "microregion": "Microrregião X",
+                "latitude": -10.0,
+                "longitude": -45.0,
+            },
+            {
+                "ibge_id": "1002",
+                "name": "Capital X",
+                "uf": "AX",
+                "region": "Norte",
+                "state": "Estado X",
+                "latitude": -12.0,
+                "longitude": -47.0,
+                "capital": True,
+                "bounding_box": {
+                    "min_lat": -12.2,
+                    "min_lon": -47.2,
+                    "max_lat": -11.8,
+                    "max_lon": -46.8,
+                },
+            },
+        ],
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(catalog_module, "get_cache_path", lambda version=None: cache_path)
+
+    result = catalog_module.load_city_catalog("test")
+    entries = {entry["ibge_id"]: entry for entry in result["data"]}
+
+    city = entries["1001"]
+    assert city["coords"] == {"lat": -10.0, "lon": -45.0}
+    assert city["state_capital"]["ibge_id"] == "1002"
+    assert city["ibge_context"]["state_capital"]["coords"] == {"lat": -12.0, "lon": -47.0}
+
+    capital = entries["1002"]
+    assert capital["coords"] == {"lat": -12.0, "lon": -47.0}
+    assert capital["bbox"] == {"south": -12.2, "west": -47.2, "north": -11.8, "east": -46.8}
+    assert capital["ibge_context"]["state_capital"]["ibge_id"] == "1002"

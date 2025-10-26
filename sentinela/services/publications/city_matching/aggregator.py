@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, MutableMapping, Sequence
+
+from .geoutils import haversine_distance_km
 
 CONTEXT_MATCH_BONUS = 0.3
 CONTEXT_MISMATCH_PENALTY = 0.7
@@ -293,38 +296,86 @@ def aggregate_with_primary_city(
     suppressed_payload = list(suppressed)
     suppressed_payload.extend(unresolved)
 
+    catalog_by_id = _resolve_catalog(catalog)
+
+    def _build_city_base_payload(record: AggregatedCity) -> dict[str, Any]:
+        entry = catalog_by_id.get(record.city_id, {})
+        coords = entry.get("coords") if isinstance(entry, Mapping) else None
+        bbox = entry.get("bbox") if isinstance(entry, Mapping) else None
+        context = entry.get("ibge_context") if isinstance(entry, Mapping) else None
+        ibge_context: dict[str, Any] = {}
+        if isinstance(context, Mapping) and context:
+            ibge_context = deepcopy(context)
+        elif isinstance(entry, Mapping):
+            for key in (
+                "region",
+                "state",
+                "intermediate_region",
+                "immediate_region",
+                "mesoregion",
+                "microregion",
+            ):
+                value = entry.get(key)
+                if value not in (None, ""):
+                    ibge_context[key] = value
+            capital = entry.get("state_capital")
+            if isinstance(capital, Mapping) and capital:
+                ibge_context["state_capital"] = deepcopy(capital)
+        payload: dict[str, Any] = {
+            "city_id": record.city_id,
+            "name": record.name,
+            "uf": record.uf,
+            "score": record.score,
+            "occurrences": record.occurrences,
+            "admin_markers": record.admin_markers,
+            "title_boost_sum": record.title_boost_sum,
+            "context_matches": record.context_matches,
+            "context_mismatches": record.context_mismatches,
+            "region": entry.get("region") if isinstance(entry, Mapping) else None,
+            "intermediate_region": (
+                entry.get("intermediate_region") if isinstance(entry, Mapping) else None
+            ),
+            "immediate_region": (
+                entry.get("immediate_region") if isinstance(entry, Mapping) else None
+            ),
+            "mesoregion": entry.get("mesoregion") if isinstance(entry, Mapping) else None,
+            "microregion": entry.get("microregion") if isinstance(entry, Mapping) else None,
+            "coords": deepcopy(coords) if isinstance(coords, Mapping) else None,
+            "bbox": deepcopy(bbox) if isinstance(bbox, Mapping) else None,
+            "ibge_context": ibge_context,
+        }
+        return payload
+
+    mentioned_payloads: list[dict[str, Any]] = []
+    mentioned_lookup: dict[str, dict[str, Any]] = {}
+    for item in mentioned:
+        base_payload = _build_city_base_payload(item)
+        base_payload["matches"] = item.matches
+        mentioned_payloads.append(base_payload)
+        mentioned_lookup[item.city_id] = base_payload
+
     payload = {
         "primary_city": None,
-        "mentioned_cities": tuple(
-            {
-                "city_id": item.city_id,
-                "name": item.name,
-                "uf": item.uf,
-                "score": item.score,
-                "occurrences": item.occurrences,
-                "admin_markers": item.admin_markers,
-                "title_boost_sum": item.title_boost_sum,
-                "context_matches": item.context_matches,
-                "context_mismatches": item.context_mismatches,
-                "matches": item.matches,
-            }
-            for item in mentioned
-        ),
+        "mentioned_cities": tuple(mentioned_payloads),
         "disambiguation": {"suppressed": tuple(suppressed_payload)},
     }
 
     if primary is not None:
-        payload["primary_city"] = {
-            "city_id": primary.city_id,
-            "name": primary.name,
-            "uf": primary.uf,
-            "score": primary.score,
-            "occurrences": primary.occurrences,
-            "admin_markers": primary.admin_markers,
-            "title_boost_sum": primary.title_boost_sum,
-            "context_matches": primary.context_matches,
-            "context_mismatches": primary.context_mismatches,
-        }
+        primary_payload = deepcopy(mentioned_lookup.get(primary.city_id))
+        if primary_payload is None:
+            primary_payload = _build_city_base_payload(primary)
+        primary_payload.pop("matches", None)
+
+        entry = catalog_by_id.get(primary.city_id, {})
+        if isinstance(entry, Mapping):
+            coords = entry.get("coords")
+            capital = entry.get("state_capital")
+            capital_coords = capital.get("coords") if isinstance(capital, Mapping) else None
+            distance = haversine_distance_km(coords, capital_coords)
+            if distance is not None:
+                primary_payload["distance_from_state_capital_km"] = distance
+
+        payload["primary_city"] = primary_payload
 
     return payload
 
