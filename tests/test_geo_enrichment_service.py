@@ -54,7 +54,12 @@ def test_enrich_geo_runs_full_pipeline(geo_module):
         call_order.append("aggregate")
         assert isinstance(matches, tuple)
         assert matches[0].candidate_id == catalog[0]["ibge_id"]
-        return GeoOutput(article_id=article_doc["id"], matches=matches, cities=())
+        return GeoOutput(
+            article_id=article_doc["id"],
+            matches=matches,
+            mentioned_cities=(),
+            disambiguation={"suppressed": ()},
+        )
 
     result = enrich_geo(
         article,
@@ -118,7 +123,7 @@ def test_enrich_geo_happy_path(geo_module, catalog_records, sample_article):
 
     def aggregate(matches, article_doc, catalog):
         catalog_by_id = {entry["ibge_id"]: entry for entry in catalog}
-        cities = []
+        mentioned = []
         for match in matches:
             entry = catalog_by_id.get(match.candidate_id)
             if entry is None:
@@ -128,14 +133,16 @@ def test_enrich_geo_happy_path(geo_module, catalog_records, sample_article):
                 "name": entry["name"],
                 "uf": entry["uf"],
                 "surface": match.surface,
-                "score": match.score,
+                "score": match.confidence or match.score,
                 "signals": match.signals,
             }
-            cities.append(payload)
+            mentioned.append(payload)
         return GeoOutput(
             article_id=article_doc["id"],
             matches=matches,
-            cities=tuple(cities),
+            primary_city=mentioned[0] if mentioned else None,
+            mentioned_cities=tuple(mentioned),
+            disambiguation={"suppressed": ()},
             metadata={"catalog_size": len(catalog)},
         )
 
@@ -150,5 +157,8 @@ def test_enrich_geo_happy_path(geo_module, catalog_records, sample_article):
 
     assert output.article_id == sample_article["id"]
     assert len(output.matches) == 2
-    assert {city["city_id"] for city in output.cities} == {"2408102", "3550308"}
+    assert {city["city_id"] for city in output.mentioned_cities} == {
+        "2408102",
+        "3550308",
+    }
     assert output.metadata == {"catalog_size": len(catalog_records)}

@@ -8,6 +8,7 @@ from sentinela.extraction.normalization import normalize_text_with_offsets
 
 from .config import CITY_CACHE_VERSION
 from .matcher import CityMatcher
+from .signals import enrich_matches_with_signals
 
 
 def _get_field_text(article_doc: Any, field: str) -> str | None:
@@ -76,6 +77,7 @@ def extract_cities_from_article(article_doc: Any, matcher: CityMatcher) -> dict[
                 }
             )
 
+    matches_payload = enrich_matches_with_signals(matches_payload, fields_payload)
     matches_payload.sort(key=lambda item: (item["field"], item["start"], item["end"]))
 
     metadata = {

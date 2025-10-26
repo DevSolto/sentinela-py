@@ -43,7 +43,16 @@ def test_extract_cities_from_article_returns_structured_matches() -> None:
     assert "campina" in body_info["normalized_text"]
     assert len(body_info["offsets"]) == len(body_info["normalized_text"])
 
-    matches = {(m["field"], m["surface"]): (m["start"], m["end"]) for m in result["matches"]}
+    matches = {}
+    for match in result["matches"]:
+        key = (match["field"], match["surface"])
+        matches[key] = (match["start"], match["end"])
+        assert "signals" in match
+        assert "confidence" in match
+        signals = match["signals"]
+        assert isinstance(signals, dict)
+        assert {"title_boost", "admin_marker", "context_uf"} <= signals.keys()
+        assert isinstance(match["confidence"], float)
     assert matches[("title", "Campina Grande")] == (
         article["title"].index("Campina Grande"),
         article["title"].index("Campina Grande") + len("Campina Grande"),
@@ -88,6 +97,8 @@ def test_extract_cities_from_article_falls_back_to_content_field() -> None:
     assert match_fields == {"title", "content"}
 
     content_match = next(m for m in result["matches"] if m["field"] == "content")
+    assert "signals" in content_match
+    assert "confidence" in content_match
     expected_start = article["content"].index("Rio de Janeiro")
     assert content_match["start"] == expected_start
     assert content_match["end"] == expected_start + len("Rio de Janeiro")
