@@ -14,6 +14,7 @@ from pymongo.collection import Collection
 
 from sentinela.infrastructure.database import MongoClientFactory
 from sentinela.services.publications.city_matching import CityMatcher, load_city_catalog
+from sentinela.services.publications.city_matching.storage import MongoCityCatalogStorage
 from sentinela.services.publications.city_matching.extractor import extract_cities_from_article
 from sentinela.services.publications.geo_cli import (
     GeoOutput,
@@ -330,12 +331,14 @@ def build_geo_enrichment_job(
     factory = factory or MongoClientFactory()
     database = factory.get_database()
     collection = database["articles"]
+    catalog_storage = MongoCityCatalogStorage(database["city_catalog"])
 
     catalog_payload = load_city_catalog(
         version=catalog_version,
         ensure_complete=ensure_complete,
         primary_source=primary_source,
         minimum_record_count=minimum_record_count,
+        storage=catalog_storage,
     )
 
     matcher = CityMatcher(catalog_payload)

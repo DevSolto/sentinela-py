@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import pytest
 
 from sentinela.services.publications.city_matching import CityMatcher
-from sentinela.services.publications.jobs.geo_enrichment_job import GeoEnrichmentJob
+from sentinela.services.publications.jobs.geo_enrichment_job import (
+    GeoEnrichmentJob,
+    build_geo_enrichment_job,
+)
 
 
 @dataclass
@@ -193,3 +196,59 @@ def test_job_allows_filtering_by_portal(
 
     assert "geo_enrichment" not in portal_a
     assert portal_b["geo-enriquecido"] is True
+
+
+def test_build_job_uses_catalog_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    loaded_args: dict[str, Any] = {}
+
+    class FakeCollection:
+        pass
+
+    class FakeCatalogCollection:
+        def find_one(self, _criteria: dict[str, Any]) -> None:  # pragma: no cover
+            return None
+
+        def replace_one(self, *_args: Any, **_kwargs: Any) -> None:  # pragma: no cover
+            return None
+
+    class FakeDatabase(dict):
+        def __getitem__(self, name: str) -> Any:  # pragma: no cover - simples
+            if name == "articles":
+                return FakeCollection()
+            if name == "city_catalog":
+                return FakeCatalogCollection()
+            raise KeyError(name)
+
+    class FakeFactory:
+        def get_database(self) -> FakeDatabase:
+            return FakeDatabase()
+
+    class FakeMatcher:
+        def __init__(self, payload: Mapping[str, Any]) -> None:
+            loaded_args["matcher_payload"] = payload
+
+        def match(self, *_args: Any, **_kwargs: Any) -> list[Any]:  # pragma: no cover
+            return []
+
+    def fake_load_catalog(**kwargs: Any) -> Mapping[str, Any]:
+        loaded_args.update(kwargs)
+        return {"metadata": {"version": "test"}, "data": [{"name": "Cidade"}]}
+
+    monkeypatch.setattr(
+        "sentinela.services.publications.jobs.geo_enrichment_job.MongoClientFactory",
+        FakeFactory,
+    )
+    monkeypatch.setattr(
+        "sentinela.services.publications.jobs.geo_enrichment_job.CityMatcher",
+        FakeMatcher,
+    )
+    monkeypatch.setattr(
+        "sentinela.services.publications.jobs.geo_enrichment_job.load_city_catalog",
+        fake_load_catalog,
+    )
+
+    job = build_geo_enrichment_job()
+
+    assert "storage" in loaded_args
+    assert loaded_args["storage"].__class__.__name__ == "MongoCityCatalogStorage"
+    assert job._catalog_payload["metadata"]["version"] == "test"
