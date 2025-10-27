@@ -15,6 +15,7 @@ O utilitário de linha de comando `sentinela-cli` fornece acesso direto aos caso
    6. [collect-portal](#collect-portal)
    7. [report-articles](#report-articles)
    8. [extract-cities](#extract-cities)
+   9. [geo-enrich](#geo-enrich)
 
 ## Visão geral
 
@@ -275,3 +276,41 @@ sentinela-cli extract-cities --portal diario-oficial --only-missing --batch-size
 ```
 
 Quando `--portal` é informado, somente artigos cujo `portal_name` coincide com o valor fornecido são analisados. Esse modo é útil para reprocessar um portal específico após ajustes de catálogo ou gazetteer, evitando reprocessamentos desnecessários nos demais portais. Os logs exibem o total escaneado e atualizado dentro do recorte informado.
+
+### geo-enrich
+
+O subcomando `geo-enrich` aplica o pipeline de enriquecimento geográfico nos artigos que ainda não possuem o campo `geo-enriquecido` ou que o têm definido como `false`. Ele utiliza o mesmo catálogo de municípios carregado pelo `sentinela-geo-enrichment`, garantindo que cada artigo tenha os atributos calculados a partir do conteúdo do texto.
+
+#### Pré-requisitos
+
+- Variáveis `MONGO_URI` e `MONGO_DATABASE` apontando para a instância que armazena a coleção `articles`.
+- Catálogo de municípios acessível localmente ou baixado automaticamente pelo comando (definido por `--catalog-version`).
+- Opcional: `SENTINELA_LOG_LEVEL=DEBUG` para acompanhar o processamento artigo a artigo.
+
+#### Argumentos disponíveis
+
+| Opção | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `--portal` | String | Não | Limita o processamento a um único portal (`portal_name`). |
+| `--batch-size` | Inteiro | Não (padrão `100`) | Define a janela de documentos carregados por lote via cursor do MongoDB. |
+| `--dry-run` | Flag | Não | Executa o job sem persistir alterações; apenas registra o que seria atualizado. |
+| `--catalog-version` | String | Não | Escolhe a versão do catálogo de municípios a ser carregada. |
+| `--ensure-complete` | Flag | Não | Força o download do catálogo completo, mesmo que um cache parcial exista. |
+| `--minimum-record-count` | Inteiro | Não (padrão `5000`) | Valida o catálogo exigindo uma quantidade mínima de cidades disponíveis. |
+| `--primary-source` | String | Não (padrão `ibge`) | Fonte prioritária utilizada ao validar ou baixar o catálogo. |
+| `--id-field` | String | Não (padrão `id`) | Campo utilizado como identificador principal ao registrar métricas e erros. |
+| `--fallback-id` | String repetível | Não (padrão `url`, `_id`) | Campos de fallback para identificar o artigo quando `id-field` está vazio. |
+| `--skip-extraction` | Flag | Não | Evita salvar o payload completo da extração (`geo_enrichment.payload`). |
+| `--log-level` | String | Não | Ajusta a verbosidade da execução atual. |
+
+#### Uso típico
+
+```bash
+export MONGO_URI="mongodb://localhost:27017"
+export MONGO_DATABASE="sentinela"
+sentinela-cli geo-enrich --batch-size 150 --catalog-version 2024-01-31
+```
+
+O comando percorre os artigos pendentes, executa o pipeline e atualiza cada documento com o bloco `geo_enrichment`, além de definir o campo `geo-enriquecido` como `true`. Cada iteração libera explicitamente a memória alocada para o payload processado, evitando o acúmulo mesmo em coleções extensas. Ao final, um resumo em JSON é exibido com métricas como `scanned`, `processed`, `enriched`, `skipped`, `errors` e o tempo total (`elapsed_ms_total`). Quando `--dry-run` é passado, nenhuma alteração é enviada ao banco, mas o fluxo e as métricas são preservados para inspeção prévia. Combine `--portal` com `--skip-extraction` quando for necessário atualizar apenas o indicador de enriquecimento para um subconjunto de artigos sem armazenar o payload completo.
+
+Consulte [`docs/geo_enrichment_cli.md`](./geo_enrichment_cli.md) para um detalhamento completo das opções e do payload gerado pelo pipeline de enriquecimento geográfico.

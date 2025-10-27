@@ -18,6 +18,9 @@ from sentinela.services.portals import build_portals_container
 from sentinela.services.publications.jobs.city_extraction_job import (
     build_default_job as build_city_extraction_job,
 )
+from sentinela.services.publications.jobs.geo_enrichment_job import (
+    build_geo_enrichment_job,
+)
 from sentinela.services.publications import build_publications_container
 
 
@@ -171,6 +174,67 @@ def parse_args() -> argparse.Namespace:
         help="Exporta o resumo final para um arquivo JSON",
     )
 
+    geo_enrich = subparsers.add_parser(
+        "geo-enrich",
+        help="Enriquece geograficamente artigos pendentes no MongoDB",
+    )
+    geo_enrich.add_argument(
+        "--portal",
+        type=str,
+        help="Limita o processamento a um portal específico",
+    )
+    geo_enrich.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Quantidade de documentos por lote ao consultar o MongoDB",
+    )
+    geo_enrich.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Executa sem persistir alterações, exibindo apenas o resumo",
+    )
+    geo_enrich.add_argument(
+        "--catalog-version",
+        default=None,
+        help="Versão do catálogo de municípios a utilizar",
+    )
+    geo_enrich.add_argument(
+        "--ensure-complete",
+        action="store_true",
+        help="Garante o download do catálogo completo quando necessário",
+    )
+    geo_enrich.add_argument(
+        "--minimum-record-count",
+        type=int,
+        default=5000,
+        help="Quantidade mínima de cidades esperada ao validar o catálogo",
+    )
+    geo_enrich.add_argument(
+        "--primary-source",
+        default="ibge",
+        help="Fonte primária utilizada ao atualizar o catálogo",
+    )
+    geo_enrich.add_argument(
+        "--id-field",
+        default="id",
+        help="Campo preferencial usado para identificar o artigo",
+    )
+    geo_enrich.add_argument(
+        "--fallback-id",
+        action="append",
+        default=["url", "_id"],
+        help=(
+            "Campos adicionais utilizados como fallback para identificar o artigo "
+            "quando o campo principal estiver vazio"
+        ),
+    )
+    geo_enrich.add_argument(
+        "--skip-extraction",
+        action="store_true",
+        help="Não inclui o payload completo da extração no documento atualizado",
+    )
+
     # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
     for sp in (
         register,
@@ -179,6 +243,7 @@ def parse_args() -> argparse.Namespace:
         collect_all,
         collect_portal,
         extract_cities,
+        geo_enrich,
     ):
         sp.add_argument(
             "--log-level",
@@ -368,6 +433,29 @@ def main() -> None:
                 "Job finalizado com %d erros", len(result.errors)
             )
             sys.exit(1)
+    elif args.command == "geo-enrich":
+        job = build_geo_enrichment_job(
+            catalog_version=args.catalog_version,
+            ensure_complete=args.ensure_complete,
+            primary_source=args.primary_source,
+            minimum_record_count=args.minimum_record_count,
+        )
+        result = job.run(
+            batch_size=args.batch_size,
+            dry_run=args.dry_run,
+            portal=args.portal,
+            include_extraction=not args.skip_extraction,
+            id_field=args.id_field,
+            fallback_ids=args.fallback_id,
+        )
+        payload = result.to_mapping()
+        print(json.dumps(payload, ensure_ascii=False))
+        if result.errors:
+            logging.getLogger("sentinela.cli").warning(
+                "Job finalizado com %d erros", len(result.errors)
+            )
+            if not args.dry_run:
+                sys.exit(1)
     else:
         raise ValueError(f"Comando desconhecido: {args.command}")
 
