@@ -206,6 +206,8 @@ def _build_ibge_context(entry: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _enrich_catalog_entries(entries: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    if len(entries) <= 1:
+        return [dict(entry) for entry in entries if isinstance(entry, Mapping)]
     enriched: list[dict[str, Any]] = []
     for entry in entries:
         if not isinstance(entry, Mapping):

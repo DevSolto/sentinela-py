@@ -34,6 +34,7 @@ sentinela-extraction-api = "sentinela.services.extraction.app:run_api"
 sentinela-extraction-worker = "sentinela.services.extraction.app:run_worker"
 sentinela-cli = "sentinela.cli:main"
 sentinela-extract-cities = "sentinela.services.publications.jobs.city_extraction_job:main"
+sentinela-geo-enrichment = "sentinela.services.publications.geo_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
