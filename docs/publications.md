@@ -23,6 +23,10 @@ O parâmetro `city` é opcional; omiti-lo mantém o comportamento anterior, reto
 
 Para garantir consistência na resolução de localidades, o módulo de publicações agora depende do catálogo versionado descrito em [`docs/cidade_catalogo.md`](./cidade_catalogo.md). O script `python -m sentinela.services.publications.city_matching.build_cache` gera o arquivo `sentinela/data/municipios_br_<versao>.json`, enriquecido com metadados de origem, checksum e data de download. A função `load_city_catalog(version)` oferece acesso simples ao JSON durante o carregamento do _gazetteer_ ou outras rotinas que necessitem do mapeamento de municípios.
 
+## CLI de enriquecimento geográfico
+
+Para inspeções manuais ou integrações pontuais existe o comando `sentinela-geo-enrichment`, que executa o pipeline completo para um arquivo de artigo e devolve o payload `GeoOutput`. O uso detalhado e a lista de opções estão documentados em [`docs/geo_enrichment_cli.md`](./geo_enrichment_cli.md).【F:sentinela/services/publications/geo_cli.py†L33-L193】
+
 ## Anexos
 
 ### Índices da coleção `articles`
