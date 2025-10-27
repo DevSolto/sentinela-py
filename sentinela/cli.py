@@ -234,6 +234,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Não inclui o payload completo da extração no documento atualizado",
     )
+    geo_enrich.add_argument(
+        "--reprocess-existing",
+        action="store_true",
+        help="Inclui artigos já marcados como geo-enriquecidos no processamento",
+    )
 
     # Nível de log por subcomando (também lê SENTINELA_LOG_LEVEL)
     for sp in (
@@ -447,6 +452,7 @@ def main() -> None:
             include_extraction=not args.skip_extraction,
             id_field=args.id_field,
             fallback_ids=args.fallback_id,
+            reprocess_existing=args.reprocess_existing,
         )
         payload = result.to_mapping()
         print(json.dumps(payload, ensure_ascii=False))
