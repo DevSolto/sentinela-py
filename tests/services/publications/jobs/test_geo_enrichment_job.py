@@ -198,6 +198,60 @@ def test_job_allows_filtering_by_portal(
     assert portal_b["geo-enriquecido"] is True
 
 
+def test_job_skips_already_enriched_articles_by_default(
+    matcher: CityMatcher, catalog_payload: dict[str, Any]
+) -> None:
+    collection = FakeCollection(
+        [
+            {
+                "_id": 7,
+                "portal_name": "Portal A",
+                "url": "https://example.com/a",
+                "title": "Campina Grande firma acordo",
+                "content": "Campina Grande firmou parceria com São Paulo.",
+                "geo-enriquecido": True,
+                "geo_enriquecido": True,
+                "geo_enrichment": {"mentioned_cities": ["old"]},
+            }
+        ]
+    )
+    job = GeoEnrichmentJob(collection, matcher, catalog_payload)
+
+    result = job.run(batch_size=5)
+
+    assert result.scanned == 0
+    assert result.enriched == 0
+    document = collection.documents[0]
+    assert document["geo_enrichment"]["mentioned_cities"] == ["old"]
+
+
+def test_job_can_reprocess_existing_articles(
+    matcher: CityMatcher, catalog_payload: dict[str, Any]
+) -> None:
+    collection = FakeCollection(
+        [
+            {
+                "_id": 10,
+                "portal_name": "Portal A",
+                "url": "https://example.com/a",
+                "title": "Campina Grande firma acordo",
+                "content": "Campina Grande firmou parceria com São Paulo.",
+                "geo-enriquecido": True,
+                "geo_enriquecido": True,
+                "geo_enrichment": {"mentioned_cities": []},
+            }
+        ]
+    )
+    job = GeoEnrichmentJob(collection, matcher, catalog_payload)
+
+    result = job.run(batch_size=5, reprocess_existing=True)
+
+    assert result.scanned == 1
+    assert result.enriched == 1
+    document = collection.documents[0]
+    assert document["geo_enrichment"]["mentioned_cities"]
+
+
 def test_build_job_uses_catalog_storage(monkeypatch: pytest.MonkeyPatch) -> None:
     loaded_args: dict[str, Any] = {}
 

@@ -97,6 +97,7 @@ class GeoEnrichmentJob:
         include_extraction: bool = True,
         id_field: str = "id",
         fallback_ids: Sequence[str] | None = None,
+        reprocess_existing: bool = False,
     ) -> GeoEnrichmentJobResult:
         """Executa o job varrendo artigos pendentes por ``geo-enriquecido``."""
 
@@ -113,12 +114,15 @@ class GeoEnrichmentJob:
         skipped = 0
         errors: list[tuple[str, str]] = []
 
-        criteria: dict[str, Any] = {
-            "$or": [
-                {"geo-enriquecido": {"$exists": False}},
-                {"geo-enriquecido": False},
-            ]
-        }
+        if reprocess_existing:
+            criteria: dict[str, Any] = {}
+        else:
+            criteria = {
+                "$or": [
+                    {"geo-enriquecido": {"$exists": False}},
+                    {"geo-enriquecido": False},
+                ]
+            }
         if portal:
             criteria["portal_name"] = portal
 

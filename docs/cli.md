@@ -279,7 +279,7 @@ Quando `--portal` é informado, somente artigos cujo `portal_name` coincide com 
 
 ### geo-enrich
 
-O subcomando `geo-enrich` aplica o pipeline de enriquecimento geográfico nos artigos que ainda não possuem o campo `geo-enriquecido` ou que o têm definido como `false`. Ele utiliza o mesmo catálogo de municípios carregado pelo `sentinela-geo-enrichment`, garantindo que cada artigo tenha os atributos calculados a partir do conteúdo do texto.
+O subcomando `geo-enrich` aplica o pipeline de enriquecimento geográfico nos artigos que ainda não possuem o campo `geo-enriquecido` ou que o têm definido como `false`. Quando necessário, é possível incluir documentos já marcados como enriquecidos por meio de `--reprocess-existing`, permitindo atualizar o payload após ajustes de catálogo. O comando utiliza o mesmo catálogo de municípios carregado pelo `sentinela-geo-enrichment`, garantindo que cada artigo tenha os atributos calculados a partir do conteúdo do texto.
 
 #### Pré-requisitos
 
@@ -301,6 +301,7 @@ O subcomando `geo-enrich` aplica o pipeline de enriquecimento geográfico nos ar
 | `--id-field` | String | Não (padrão `id`) | Campo utilizado como identificador principal ao registrar métricas e erros. |
 | `--fallback-id` | String repetível | Não (padrão `url`, `_id`) | Campos de fallback para identificar o artigo quando `id-field` está vazio. |
 | `--skip-extraction` | Flag | Não | Evita salvar o payload completo da extração (`geo_enrichment.payload`). |
+| `--reprocess-existing` | Flag | Não | Processa novamente artigos já marcados como geo-enriquecidos. |
 | `--log-level` | String | Não | Ajusta a verbosidade da execução atual. |
 
 #### Uso típico
@@ -311,6 +312,6 @@ export MONGO_DATABASE="sentinela"
 sentinela-cli geo-enrich --batch-size 150 --catalog-version 2024-01-31
 ```
 
-O comando percorre os artigos pendentes, executa o pipeline e atualiza cada documento com o bloco `geo_enrichment`, além de definir o campo `geo-enriquecido` como `true`. Cada iteração libera explicitamente a memória alocada para o payload processado, evitando o acúmulo mesmo em coleções extensas. Ao final, um resumo em JSON é exibido com métricas como `scanned`, `processed`, `enriched`, `skipped`, `errors` e o tempo total (`elapsed_ms_total`). Quando `--dry-run` é passado, nenhuma alteração é enviada ao banco, mas o fluxo e as métricas são preservados para inspeção prévia. Combine `--portal` com `--skip-extraction` quando for necessário atualizar apenas o indicador de enriquecimento para um subconjunto de artigos sem armazenar o payload completo.
+O comando percorre os artigos pendentes (ou todos, quando `--reprocess-existing` estiver ativo), executa o pipeline e atualiza cada documento com o bloco `geo_enrichment`, além de definir o campo `geo-enriquecido` como `true`. Cada iteração libera explicitamente a memória alocada para o payload processado, evitando o acúmulo mesmo em coleções extensas. Ao final, um resumo em JSON é exibido com métricas como `scanned`, `processed`, `enriched`, `skipped`, `errors` e o tempo total (`elapsed_ms_total`). Quando `--dry-run` é passado, nenhuma alteração é enviada ao banco, mas o fluxo e as métricas são preservados para inspeção prévia. Combine `--portal` com `--skip-extraction` quando for necessário atualizar apenas o indicador de enriquecimento para um subconjunto de artigos sem armazenar o payload completo, ou adicione `--reprocess-existing` para refazer o enriquecimento após atualizações do catálogo.
 
 Consulte [`docs/geo_enrichment_cli.md`](./geo_enrichment_cli.md) para um detalhamento completo das opções e do payload gerado pelo pipeline de enriquecimento geográfico.
