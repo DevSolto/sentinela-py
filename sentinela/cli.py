@@ -6,6 +6,7 @@ import csv
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,18 @@ from sentinela.services.publications.jobs.geo_enrichment_job import (
     build_geo_enrichment_job,
 )
 from sentinela.services.publications import build_publications_container
+
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -262,98 +275,187 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     load_dotenv()
     args = parse_args()
+    console = Console()
     level_name = (
         getattr(args, "log_level", None) or os.getenv("SENTINELA_LOG_LEVEL", "INFO")
     )
+    handler = RichHandler(console=console, markup=True, rich_tracebacks=True)
     logging.basicConfig(
         level=getattr(logging, str(level_name).upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[handler],
+        force=True,
     )
+
+    logger = logging.getLogger("sentinela.cli")
     portals_container = build_portals_container()
     news_container = build_news_container()
 
     if args.command == "register-portal":
         portal = _load_portal_from_json(args.path)
         portals_container.portal_service.register(portal)
-        print(f"Portal '{portal.name}' cadastrado com sucesso.")
+        console.print(f"[green]Portal '{portal.name}' cadastrado com sucesso.[/green]")
     elif args.command == "list-portals":
-        for portal in portals_container.portal_service.list_portals():
-            print(f"- {portal.name}: {portal.base_url}")
+        portals = list(portals_container.portal_service.list_portals())
+        if not portals:
+            console.print("[yellow]Nenhum portal cadastrado no momento.[/yellow]")
+        else:
+            for portal in portals:
+                console.print(f"[bold]-[/bold] {portal.name}: {portal.base_url}")
     elif args.command == "collect":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date) if args.end_date else start_date
-        try:
-            result = news_container.collector_service.collect(
-                args.portal, start_date, end_date, keep_articles=False
+        total_days = (end_date - start_date).days + 1
+        day_done_pattern = re.compile(r"^\\d{4}-\\d{2}-\\d{2}:")
+        progress_columns = (
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        )
+        with Progress(*progress_columns, console=console, transient=True) as progress:
+            task_id = progress.add_task(
+                f"[cyan]Coletando notícias de '{args.portal}'", total=total_days
             )
-        except (ValueError, RuntimeError) as exc:
-            print(str(exc))
-            return
-        print(
-            f"{result.total_new} novas notícias coletadas para '{args.portal}'."
+
+            def status_handler(message: str) -> None:
+                if day_done_pattern.match(message):
+                    progress.advance(task_id)
+                progress.console.log(message)
+
+            try:
+                result = news_container.collector_service.collect(
+                    args.portal,
+                    start_date,
+                    end_date,
+                    status_publisher=status_handler,
+                    keep_articles=False,
+                )
+            except (ValueError, RuntimeError) as exc:
+                progress.stop()
+                console.print(f"[red]{exc}[/red]")
+                return
+        console.print(
+            f"[green]{result.total_new} novas notícias coletadas para '{args.portal}'.[/green]"
         )
     elif args.command == "list-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
-        for article in news_container.collector_service.list_articles(
+        articles = news_container.collector_service.list_articles(
             args.portal, start_date, end_date
-        ):
-            print(
-                json.dumps(
-                    {
-                        "portal": article.portal_name,
-                        "titulo": article.title,
-                        "url": article.url,
-                        "publicado_em": article.published_at.isoformat(),
-                    },
-                    ensure_ascii=False,
-                )
+        )
+        found_any = False
+        for article in articles:
+            found_any = True
+            console.print_json(
+                data={
+                    "portal": article.portal_name,
+                    "titulo": article.title,
+                    "url": article.url,
+                    "publicado_em": article.published_at.isoformat(),
+                }
+            )
+        if not found_any:
+            console.print(
+                "[yellow]Nenhum artigo encontrado para os filtros informados.[/yellow]"
             )
     elif args.command == "collect-all":
         min_date = _parse_date(args.min_date) if args.min_date else None
         try:
             dump_path = _prepare_first_page_dump_path(args, args.portal)
         except RuntimeError as exc:
-            print(str(exc))
+            console.print(f"[red]{exc}[/red]")
             return
-        try:
-            result = news_container.collector_service.collect_all_for_portal(
-                args.portal,
-                start_page=args.start_page,
-                max_pages=args.max_pages,
-                min_published_date=min_date,
-                keep_articles=False,
-                first_page_html_path=dump_path,
+        page_pattern = re.compile(r"^Página \\d+:")
+        progress_columns = (
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+        )
+        with Progress(*progress_columns, console=console, transient=True) as progress:
+            task_id = progress.add_task(
+                f"[cyan]Varredura de '{args.portal}'", total=None, start=False
             )
-        except (ValueError, RuntimeError) as exc:
-            print(str(exc))
-            return
-        print(
-            f"{result.total_new} novas notícias coletadas em '{args.portal}' (páginas iniciando em {args.start_page}{' com limite de ' + str(args.max_pages) if args.max_pages else ''})."
+            started = False
+
+            def status_handler(message: str) -> None:
+                nonlocal started
+                progress.console.log(message)
+                if not started:
+                    progress.start_task(task_id)
+                    started = True
+                if page_pattern.match(message):
+                    progress.advance(task_id)
+
+            try:
+                result = news_container.collector_service.collect_all_for_portal(
+                    args.portal,
+                    start_page=args.start_page,
+                    max_pages=args.max_pages,
+                    min_published_date=min_date,
+                    keep_articles=False,
+                    first_page_html_path=dump_path,
+                    status_publisher=status_handler,
+                )
+            except (ValueError, RuntimeError) as exc:
+                progress.stop()
+                console.print(f"[red]{exc}[/red]")
+                return
+        limit_suffix = f" com limite de {args.max_pages}" if args.max_pages else ""
+        console.print(
+            f"[green]{result.total_new} novas notícias coletadas em '{args.portal}' "
+            f"(páginas iniciando em {args.start_page}{limit_suffix}).[/green]"
         )
         if dump_path and dump_path.exists():
-            print(f"HTML da primeira página salvo em '{dump_path}'.")
+            console.print(f"[blue]HTML da primeira página salvo em '{dump_path}'.[/blue]")
     elif args.command == "collect-portal":
         try:
             dump_path = _prepare_first_page_dump_path(args, args.portal)
         except RuntimeError as exc:
-            print(str(exc))
+            console.print(f"[red]{exc}[/red]")
             return
-        try:
-            result = news_container.collector_service.collect_all_for_portal(
-                args.portal,
-                keep_articles=False,
-                first_page_html_path=dump_path,
+        page_pattern = re.compile(r"^Página \\d+:")
+        progress_columns = (
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+        )
+        with Progress(*progress_columns, console=console, transient=True) as progress:
+            task_id = progress.add_task(
+                f"[cyan]Varrendo todas as páginas de '{args.portal}'", total=None, start=False
             )
-        except (ValueError, RuntimeError) as exc:
-            print(str(exc))
-            return
-        print(
-            "{total} novas notícias coletadas em '{portal}' varrendo todas as páginas."
-            .format(total=result.total_new, portal=args.portal)
+            started = False
+
+            def status_handler(message: str) -> None:
+                nonlocal started
+                progress.console.log(message)
+                if not started:
+                    progress.start_task(task_id)
+                    started = True
+                if page_pattern.match(message):
+                    progress.advance(task_id)
+
+            try:
+                result = news_container.collector_service.collect_all_for_portal(
+                    args.portal,
+                    keep_articles=False,
+                    first_page_html_path=dump_path,
+                    status_publisher=status_handler,
+                )
+            except (ValueError, RuntimeError) as exc:
+                progress.stop()
+                console.print(f"[red]{exc}[/red]")
+                return
+        console.print(
+            f"[green]{result.total_new} novas notícias coletadas em '{args.portal}' varrendo todas as páginas.[/green]"
         )
         if dump_path and dump_path.exists():
-            print(f"HTML da primeira página salvo em '{dump_path}'.")
+            console.print(f"[blue]HTML da primeira página salvo em '{dump_path}'.[/blue]")
     elif args.command == "report-articles":
         start_date = _parse_date(args.start_date)
         end_date = _parse_date(args.end_date)
@@ -379,64 +481,82 @@ def main() -> None:
         ]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         rows = 0
-        with output_path.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=fieldnames)
-            writer.writeheader()
-            for article in articles:
-                base_payload = {
-                    "portal": article.portal_name,
-                    "titulo": article.title,
-                    "url": article.url,
-                    "conteudo": article.content,
-                    "publicado_em": article.published_at.isoformat(),
-                    "resumo": article.summary or "",
-                    "classificacao": article.classification or "",
-                }
-                if article.cities:
-                    for city in article.cities:
+        progress_columns = (
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+        )
+        with Progress(*progress_columns, console=console, transient=True) as progress:
+            task_id = progress.add_task(
+                f"[cyan]Gerando relatório para '{args.portal}'", total=None
+            )
+            with output_path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=fieldnames)
+                writer.writeheader()
+                for article in articles:
+                    base_payload = {
+                        "portal": article.portal_name,
+                        "titulo": article.title,
+                        "url": article.url,
+                        "conteudo": article.content,
+                        "publicado_em": article.published_at.isoformat(),
+                        "resumo": article.summary or "",
+                        "classificacao": article.classification or "",
+                    }
+                    if article.cities:
+                        for city in article.cities:
+                            writer.writerow(
+                                {
+                                    **base_payload,
+                                    "cidade": city.label or city.identifier or "",
+                                    "cidade_id": city.city_id or "",
+                                    "uf": city.uf or "",
+                                    "ocorrencias": city.occurrences,
+                                    "fontes": ", ".join(city.sources),
+                                }
+                            )
+                            rows += 1
+                            progress.advance(task_id)
+                    elif incluir_sem_cidades:
                         writer.writerow(
                             {
                                 **base_payload,
-                                "cidade": city.label or city.identifier or "",
-                                "cidade_id": city.city_id or "",
-                                "uf": city.uf or "",
-                                "ocorrencias": city.occurrences,
-                                "fontes": ", ".join(city.sources),
+                                "cidade": "",
+                                "cidade_id": "",
+                                "uf": "",
+                                "ocorrencias": "",
+                                "fontes": "",
                             }
                         )
                         rows += 1
-                elif incluir_sem_cidades:
-                    writer.writerow(
-                        {
-                            **base_payload,
-                            "cidade": "",
-                            "cidade_id": "",
-                            "uf": "",
-                            "ocorrencias": "",
-                            "fontes": "",
-                        }
+                        progress.advance(task_id)
+                    progress.update(
+                        task_id,
+                        description=(
+                            f"[cyan]Gerando relatório para '{args.portal}' ({rows} linha(s))"
+                        ),
                     )
-                    rows += 1
-        print(
-            f"Relatório gerado com {rows} registro(s) em '{output_path}'."
+        console.print(
+            f"[green]Relatório gerado com {rows} registro(s) em '{output_path}'.[/green]"
         )
     elif args.command == "extract-cities":
         job = build_city_extraction_job()
-        result = job.run(
-            batch_size=args.batch_size,
-            force=args.force,
-            only_missing=args.only_missing,
-            dry_run=args.dry_run,
-            portal=args.portal,
-        )
+        with console.status("Executando extração de cidades...", spinner="dots"):
+            result = job.run(
+                batch_size=args.batch_size,
+                force=args.force,
+                only_missing=args.only_missing,
+                dry_run=args.dry_run,
+                portal=args.portal,
+            )
         summary = result.to_summary()
-        print(json.dumps(summary, ensure_ascii=False))
+        console.print_json(data=summary)
         if args.metrics_file:
             _write_metrics_file(args.metrics_file, summary)
+            console.log(f"Métricas salvas em '{args.metrics_file}'.")
         if result.errors:
-            logging.getLogger("sentinela.cli").warning(
-                "Job finalizado com %d erros", len(result.errors)
-            )
+            logger.warning("Job finalizado com %d erros", len(result.errors))
             sys.exit(1)
     elif args.command == "geo-enrich":
         job = build_geo_enrichment_job(
@@ -445,21 +565,20 @@ def main() -> None:
             primary_source=args.primary_source,
             minimum_record_count=args.minimum_record_count,
         )
-        result = job.run(
-            batch_size=args.batch_size,
-            dry_run=args.dry_run,
-            portal=args.portal,
-            include_extraction=not args.skip_extraction,
-            id_field=args.id_field,
-            fallback_ids=args.fallback_id,
-            reprocess_existing=args.reprocess_existing,
-        )
-        payload = result.to_mapping()
-        print(json.dumps(payload, ensure_ascii=False))
-        if result.errors:
-            logging.getLogger("sentinela.cli").warning(
-                "Job finalizado com %d erros", len(result.errors)
+        with console.status("Executando geo-enriquecimento...", spinner="dots"):
+            result = job.run(
+                batch_size=args.batch_size,
+                dry_run=args.dry_run,
+                portal=args.portal,
+                include_extraction=not args.skip_extraction,
+                id_field=args.id_field,
+                fallback_ids=args.fallback_id,
+                reprocess_existing=args.reprocess_existing,
             )
+        payload = result.to_mapping()
+        console.print_json(data=payload)
+        if result.errors:
+            logger.warning("Job finalizado com %d erros", len(result.errors))
             if not args.dry_run:
                 sys.exit(1)
     else:

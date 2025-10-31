@@ -210,6 +210,7 @@ class NewsCollectorService:
         *,
         keep_articles: bool = True,
         first_page_html_path: Path | None = None,
+        status_publisher: Callable[[str], None] | None = None,
     ) -> CollectionResult:
         """Coleta notícias paginadas até atingir os limites informados.
 
@@ -224,6 +225,8 @@ class NewsCollectorService:
                 apenas os contadores forem necessários.
             first_page_html_path: Quando informado, salva o HTML bruto da
                 primeira página analisada no caminho indicado.
+            status_publisher: Callback opcional para mensagens de status
+                durante a coleta paginada.
 
         Returns:
             Um ``CollectionResult`` com o total de novos artigos e, quando
@@ -247,10 +250,11 @@ class NewsCollectorService:
         saved_urls: set[str] = set()
         first_page_dump_reported = False
 
-        def status(msg: str) -> None:
-            log.info(msg)
+        def publish(message: str) -> None:
+            log.info(message)
+            self._publish_status(message, status_publisher)
 
-        status(
+        publish(
             f"Portal '{portal_name}': iniciando na página {page}"
             + (f" (limite {max_pages})" if max_pages else "")
         )
@@ -274,7 +278,7 @@ class NewsCollectorService:
             )
             elapsed = time.perf_counter() - start_ts
             if not collected:
-                status(
+                publish(
                     f"Portal '{portal_name}': página {current_page} sem itens, encerrando."
                 )
                 break
@@ -284,7 +288,7 @@ class NewsCollectorService:
                 and not first_page_dump_reported
                 and first_page_html_path.exists()
             ):
-                status(
+                publish(
                     "Portal '{portal}': HTML da primeira página salvo em {path}".format(
                         portal=portal_name, path=first_page_html_path
                     )
@@ -334,7 +338,7 @@ class NewsCollectorService:
                 all_new.extend(stored_articles_buffer)
             batch.clear()
 
-            status(
+            publish(
                 "Página {page}: itens {page_seen_raw}, considerados {page_seen_considered}, novos {len_new}, "
                 "descartados(run) {skip_run}, descartados(db) {skip_db}, descartados(data) {skip_date} | "
                 "Tempo {elapsed:.2f}s | Totais: vistos {total_seen}, novos {total_new}, descartados(run) {total_skip_run}, "
@@ -361,7 +365,7 @@ class NewsCollectorService:
             pages_processed += 1
 
             if stop_due_to_min_date:
-                status(
+                publish(
                     "Portal '{portal}': data mínima {date} atingida na página {page}, encerrando."
                     .format(
                         portal=portal_name,
@@ -371,7 +375,7 @@ class NewsCollectorService:
                 )
                 break
 
-        log.info(
+        publish(
             "Concluído. Páginas: {pages}, vistos: {seen}, novos: {new}, descartados(run): {skip_run}, "
             "descartados(db): {skip_db}, descartados(data): {skip_date}".format(
                 pages=pages_processed,
